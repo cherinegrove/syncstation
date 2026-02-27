@@ -12,6 +12,30 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/oauth',    require('./routes/oauth'));
 app.use('/action',   require('./routes/action'));
 app.use('/settings', require('./routes/settings'));
+app.use('/crm-card', require('./routes/crmcard'));
+
+// Root landing page
+app.get('/', (req, res) => {
+  res.send(`
+    <html>
+    <head>
+      <title>PropBridge</title>
+      <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 80px auto; text-align: center; color: #333; }
+        h1 { font-size: 36px; margin-bottom: 8px; }
+        p { color: #666; margin-bottom: 32px; }
+        a { background: #ff6b35; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 500; }
+        a:hover { background: #ff8555; }
+      </style>
+    </head>
+    <body>
+      <h1>⇄ PropBridge</h1>
+      <p>Sync property values between associated HubSpot CRM objects.</p>
+      <a href="/oauth/install">Install PropBridge</a>
+    </body>
+    </html>
+  `);
+});
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
@@ -20,7 +44,8 @@ const PORT = process.env.PORT || 3000;
 const BASE  = process.env.APP_BASE_URL || 'http://localhost:' + PORT;
 
 app.listen(PORT, () => {
-  console.log(`🚀  HubSpot Sync App running on port ${PORT}`);
+  console.log(`🚀  PropBridge running on port ${PORT}`);
   console.log(`    Install URL:  ${BASE}/oauth/install`);
   console.log(`    Settings URL: ${BASE}/settings`);
+  console.log(`    CRM Card URL: ${BASE}/crm-card`);
 });
