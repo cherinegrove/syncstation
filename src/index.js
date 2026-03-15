@@ -45,7 +45,7 @@ const PORT = process.env.PORT || 3000;
 const BASE  = process.env.APP_BASE_URL || 'http://localhost:' + PORT;
 
 app.listen(PORT, () => {
-  console.log(`🚀  PropBridge running on port ${PORT}`);
+  console.log(`🚀  PropBridge V2 running on port ${PORT}`);
   console.log(`    Install URL:   ${BASE}/oauth/install`);
   console.log(`    Settings URL:  ${BASE}/settings`);
   console.log(`    Webhook URL:   ${BASE}/webhooks/receive`);
