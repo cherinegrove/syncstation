@@ -3,9 +3,10 @@ const hubspot    = require('@hubspot/api-client');
 const axios      = require('axios');
 const tokenStore = require('./tokenStore');
 
-const CLIENT_ID     = process.env.HUBSPOT_CLIENT_ID;
+const CLIENT_ID  = process.env.HUBSPOT_CLIENT_ID;
 const CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET;
-const REDIRECT_URI  = `${process.env.APP_BASE_URL}/oauth/callback`;
+const BASE_URL   = process.env.APP_BASE_URL || ('https://' + process.env.RAILWAY_PUBLIC_DOMAIN);
+const REDIRECT_URI = `${BASE_URL}/oauth/callback`;
 
 const SCOPES = [
   'automation',
@@ -32,6 +33,8 @@ function getAuthUrl() {
     redirect_uri: REDIRECT_URI,
     scope:        SCOPES
   });
+  console.log('[OAuth] REDIRECT_URI:', REDIRECT_URI);
+  console.log('[OAuth] BASE_URL:', BASE_URL);
   return `https://app.hubspot.com/oauth/authorize?${params}`;
 }
 
