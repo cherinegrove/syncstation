@@ -42,7 +42,7 @@ app.get('/', (req, res) => {
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
 const PORT = process.env.PORT || 3000;
-const BASE  = process.env.APP_BASE_URL || 'http://localhost:' + PORT;
+const BASE = process.env.APP_BASE_URL || 'https://' + process.env.RAILWAY_PUBLIC_DOMAIN || 'http://localhost:' + PORT;
 
 app.listen(PORT, () => {
   console.log(`🚀  PropBridge V2 running on port ${PORT}`);
