@@ -39,19 +39,22 @@ function getAuthUrl() {
 }
 
 async function exchangeCode(code) {
-  const payload = new URLSearchParams({
-    grant_type:    'authorization_code',
-    client_id:     CLIENT_ID,
-    client_secret: CLIENT_SECRET,
-    redirect_uri:  REDIRECT_URI,
-    code
-  });
+  const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
   console.log('[OAuth] Exchanging code with redirect_uri:', REDIRECT_URI);
   try {
     const { data } = await axios.post(
       'https://api-eu1.hubapi.com/oauth/v1/token',
-      payload,
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      new URLSearchParams({
+        grant_type:   'authorization_code',
+        redirect_uri: REDIRECT_URI,
+        code
+      }),
+      {
+        headers: {
+          'Content-Type':  'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${credentials}`
+        }
+      }
     );
     return data;
   } catch (err) {
@@ -64,15 +67,19 @@ async function refreshToken(portalId) {
   const stored = await tokenStore.get(portalId);
   if (!stored) throw new Error(`No tokens found for portal ${portalId}`);
 
+  const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
   const { data } = await axios.post(
     'https://api-eu1.hubapi.com/oauth/v1/token',
     new URLSearchParams({
       grant_type:    'refresh_token',
-      client_id:     CLIENT_ID,
-      client_secret: CLIENT_SECRET,
       refresh_token: stored.refresh_token
     }),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    {
+      headers: {
+        'Content-Type':  'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${credentials}`
+      }
+    }
   );
 
   const updated = { ...stored, ...data, savedAt: Date.now() };
