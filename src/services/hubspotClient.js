@@ -3,10 +3,13 @@ const hubspot    = require('@hubspot/api-client');
 const axios      = require('axios');
 const tokenStore = require('./tokenStore');
 
-const CLIENT_ID     = process.env.HUBSPOT_CLIENT_ID;
-const CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET;
-const BASE_URL      = process.env.APP_BASE_URL || ('https://' + process.env.RAILWAY_PUBLIC_DOMAIN);
-const REDIRECT_URI  = `${BASE_URL}/oauth/callback`;
+function getBaseUrl() {
+  return process.env.APP_BASE_URL || ('https://' + process.env.RAILWAY_PUBLIC_DOMAIN);
+}
+
+function getRedirectUri() {
+  return `${getBaseUrl()}/oauth/callback`;
+}
 
 const SCOPES = [
   'automation',
@@ -28,37 +31,39 @@ const SCOPES = [
 ].join(' ');
 
 function getAuthUrl() {
+  const clientId    = process.env.HUBSPOT_CLIENT_ID;
+  const redirectUri = getRedirectUri();
+  console.log('[OAuth] CLIENT_ID:', clientId);
+  console.log('[OAuth] REDIRECT_URI:', redirectUri);
+  console.log('[OAuth] BASE_URL:', getBaseUrl());
   const params = new URLSearchParams({
-    client_id:    CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
+    client_id:    clientId,
+    redirect_uri: redirectUri,
     scope:        SCOPES
   });
-  console.log('[OAuth] REDIRECT_URI:', REDIRECT_URI);
-  console.log('[OAuth] BASE_URL:', BASE_URL);
   return `https://app-eu1.hubspot.com/oauth/authorize?${params}`;
 }
 
 async function exchangeCode(code) {
-  const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-  console.log('[OAuth] Exchanging code with redirect_uri:', REDIRECT_URI);
+  const clientId     = process.env.HUBSPOT_CLIENT_ID;
+  const clientSecret = process.env.HUBSPOT_CLIENT_SECRET;
+  const redirectUri  = getRedirectUri();
+  console.log('[OAuth] Exchanging code, client_id:', clientId);
   try {
     const { data } = await axios.post(
       'https://api-eu1.hubapi.com/oauth/v1/token',
       new URLSearchParams({
-        grant_type:   'authorization_code',
-        redirect_uri: REDIRECT_URI,
+        grant_type:    'authorization_code',
+        client_id:     clientId,
+        client_secret: clientSecret,
+        redirect_uri:  redirectUri,
         code
       }),
-      {
-        headers: {
-          'Content-Type':  'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${credentials}`
-        }
-      }
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
     return data;
   } catch (err) {
-    console.error('[OAuth] Exchange error details:', JSON.stringify(err.response?.data));
+    console.error('[OAuth] Exchange error:', JSON.stringify(err.response?.data));
     throw err;
   }
 }
@@ -67,19 +72,15 @@ async function refreshToken(portalId) {
   const stored = await tokenStore.get(portalId);
   if (!stored) throw new Error(`No tokens found for portal ${portalId}`);
 
-  const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
   const { data } = await axios.post(
     'https://api-eu1.hubapi.com/oauth/v1/token',
     new URLSearchParams({
       grant_type:    'refresh_token',
+      client_id:     process.env.HUBSPOT_CLIENT_ID,
+      client_secret: process.env.HUBSPOT_CLIENT_SECRET,
       refresh_token: stored.refresh_token
     }),
-    {
-      headers: {
-        'Content-Type':  'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${credentials}`
-      }
-    }
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
 
   const updated = { ...stored, ...data, savedAt: Date.now() };
