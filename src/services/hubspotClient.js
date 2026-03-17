@@ -35,7 +35,7 @@ function getAuthUrl() {
   });
   console.log('[OAuth] REDIRECT_URI:', REDIRECT_URI);
   console.log('[OAuth] BASE_URL:', BASE_URL);
-  return `https://app.hubspot.com/oauth/authorize?${params}`;
+  return `https://app-eu1.hubspot.com/oauth/authorize?${params}`;
 }
 
 async function exchangeCode(code) {
