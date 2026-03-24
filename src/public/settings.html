@@ -507,7 +507,11 @@
     <div class="logo-icon">⇄</div>
     PropBridge
   </div>
-  <div class="portal-badge" id="portalBadge">Loading...</div>
+  <div style="display:flex;gap:20px;align-items:center">
+  <a id="navSettings" href="#" style="color:var(--text);text-decoration:none;font-size:14px;font-weight:500">Sync Rules</a>
+  <a id="navAccount" href="#" style="color:var(--muted);text-decoration:none;font-size:14px">Account</a>
+</div>
+<div class="portal-badge" id="portalBadge">Loading...</div>
 </div>
 
 <div class="main">
@@ -630,6 +634,8 @@
   const urlParams = new URLSearchParams(window.location.search);
   const portalId = urlParams.get('portalId') || 'Demo';
   document.getElementById('portalBadge').textContent = 'Portal ' + portalId;
+  document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
+document.getElementById('navAccount').href = '/account?portalId=' + portalId;
 
   function render() {
     const list = document.getElementById('rulesList');
