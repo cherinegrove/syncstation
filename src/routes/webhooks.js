@@ -5,6 +5,24 @@ const { getClient } = require('../services/hubspotClient');
 const { sync }      = require('../services/syncService');
 const { getRules }  = require('./settings');
 
+// Deduplicate rapid updates - track recently processed
+const recentlyProcessed = new Map();
+const DEDUP_WINDOW_MS = 5000; // 5 second dedup window
+
+function isDuplicate(key) {
+  const lastTime = recentlyProcessed.get(key);
+  if (lastTime && Date.now() - lastTime < DEDUP_WINDOW_MS) return true;
+  recentlyProcessed.set(key, Date.now());
+  // Clean up old entries
+  if (recentlyProcessed.size > 1000) {
+    const cutoff = Date.now() - DEDUP_WINDOW_MS * 2;
+    for (const [k, v] of recentlyProcessed) {
+      if (v < cutoff) recentlyProcessed.delete(k);
+    }
+  }
+  return false;
+}
+
 // POST /webhooks/receive
 router.post('/receive', async (req, res) => {
   res.status(200).send('ok');
@@ -12,10 +30,12 @@ router.post('/receive', async (req, res) => {
   const events = Array.isArray(req.body) ? req.body : [req.body];
   console.log(`[Webhooks] Received ${events.length} event(s)`);
 
-  // Log first event to understand structure
   if (events.length > 0) {
     console.log('[Webhooks] Sample event:', JSON.stringify(events[0]));
   }
+
+  // Small delay to let HubSpot settle on the latest value (fixes race condition)
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
   const byPortal = {};
   for (const event of events) {
@@ -50,15 +70,12 @@ async function processPortalEvents(portalId, events) {
   }
 
   for (const event of events) {
-    // HubSpot sends different field names depending on version
     const objectId      = event.objectId || event.id;
     const propertyName  = event.propertyName || event.property;
     const propertyValue = event.propertyValue || event.value;
 
-    // Handle subscriptionType like "deal.propertyChange" or objectType field
     let objectType = event.objectType;
     if (!objectType && event.subscriptionType) {
-      // e.g. "deal.propertyChange" -> "deals"
       const prefix = event.subscriptionType.split('.')[0];
       objectType = normalizeObjectType(prefix);
     }
@@ -66,7 +83,14 @@ async function processPortalEvents(portalId, events) {
     console.log(`[Webhooks] ${objectType} ${objectId} - ${propertyName} changed to "${propertyValue}"`);
 
     if (!objectType || !objectId || !propertyName) {
-      console.log('[Webhooks] Missing required fields, skipping event');
+      console.log('[Webhooks] Missing required fields, skipping');
+      continue;
+    }
+
+    // Deduplicate rapid updates
+    const dedupKey = `${portalId}-${objectType}-${objectId}-${propertyName}`;
+    if (isDuplicate(dedupKey)) {
+      console.log(`[Webhooks] Duplicate event skipped: ${dedupKey}`);
       continue;
     }
 
@@ -122,10 +146,12 @@ function normalizeObjectType(raw) {
     'ticket':    'tickets',
     'lead':      'leads',
     'product':   'products',
+    'project':   'projects',
     'contacts':  'contacts',
     'companies': 'companies',
     'deals':     'deals',
-    'tickets':   'tickets'
+    'tickets':   'tickets',
+    'projects':  'projects'
   };
   return map[raw?.toLowerCase()] || raw?.toLowerCase();
 }
