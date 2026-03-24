@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PropBridge Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --accent: #ff6b35;
+    --text: #f0f0f4;
+    --muted: #8888a0;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo { font-family: 'DM Mono', monospace; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), #ffb347); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .admin-badge { background: var(--accent); color: white; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-family: 'DM Mono', monospace; }
+
+  .main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+  .page-title { font-size: 28px; font-weight: 600; margin-bottom: 6px; }
+  .page-subtitle { color: var(--muted); font-size: 15px; margin-bottom: 32px; }
+
+  .stats-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 32px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; }
+  .stat-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+  .stat-label { font-size: 12px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  th { text-align: left; padding: 12px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500; }
+  td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+
+  .tier-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: 'DM Mono', monospace;
+  }
+  .tier-trial    { background: rgba(251,191,36,0.15); color: var(--warning); border: 1px solid rgba(251,191,36,0.3); }
+  .tier-starter  { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
+  .tier-growth   { background: rgba(96,165,250,0.1); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }
+  .tier-pro      { background: rgba(167,139,250,0.1); color: #a78bfa; border: 1px solid rgba(167,139,250,0.3); }
+  .tier-business { background: rgba(255,107,53,0.1); color: var(--accent); border: 1px solid rgba(255,107,53,0.3); }
+  .tier-expired  { background: rgba(248,113,113,0.1); color: var(--error); border: 1px solid rgba(248,113,113,0.3); }
+
+  select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  .btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--accent);
+    color: white;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #ff8555; }
+
+  .mono { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--success);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 14px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 300;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⇄</div>
+    PropBridge
+    <span class="admin-badge">ADMIN</span>
+  </div>
+  <span class="mono" id="lastUpdated"></span>
+</div>
+
+<div class="main">
+  <div class="page-title">Portal Management</div>
+  <div class="page-subtitle">Manage installed portals, tiers and billing.</div>
+
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total portals</div></div>
+    <div class="stat-card"><div class="stat-value" id="statTrial">0</div><div class="stat-label">On trial</div></div>
+    <div class="stat-card"><div class="stat-value" id="statPaid">0</div><div class="stat-label">Paid</div></div>
+    <div class="stat-card"><div class="stat-value" id="statExpired">0</div><div class="stat-label">Expired</div></div>
+    <div class="stat-card"><div class="stat-value" id="statMRR">$0</div><div class="stat-label">Est. MRR</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Portal ID</th>
+        <th>Current Tier</th>
+        <th>Trial Started</th>
+        <th>Last Updated</th>
+        <th>Change Tier</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="portalTable">
+      <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Loading...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const TIER_PRICES = { trial: 0, starter: 7, growth: 12, pro: 16, business: 25 };
+
+  async function load() {
+    const res  = await fetch('/admin/portals');
+    const data = await res.json();
+    const portals = data.portals || [];
+
+    const now     = Date.now();
+    let trial = 0, paid = 0, expired = 0, mrr = 0;
+
+    portals.forEach(p => {
+      if (p.tier === 'trial') {
+        const days = (now - new Date(p.trial_started_at).getTime()) / 86400000;
+        if (days > 14) expired++;
+        else trial++;
+      } else {
+        paid++;
+        mrr += TIER_PRICES[p.tier] || 0;
+      }
+    });
+
+    document.getElementById('statTotal').textContent   = portals.length;
+    document.getElementById('statTrial').textContent   = trial;
+    document.getElementById('statPaid').textContent    = paid;
+    document.getElementById('statExpired').textContent = expired;
+    document.getElementById('statMRR').textContent     = '$' + mrr;
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    const tbody = document.getElementById('portalTable');
+    if (!portals.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">No portals installed yet</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = portals.map(p => {
+      const days = (now - new Date(p.trial_started_at).getTime()) / 86400000;
+      const isExpired = p.tier === 'trial' && days > 14;
+      const tierClass = isExpired ? 'expired' : p.tier;
+      const tierLabel = isExpired ? 'Trial Expired' : p.tier.charAt(0).toUpperCase() + p.tier.slice(1);
+      const daysLeft  = p.tier === 'trial' && !isExpired ? `(${Math.ceil(14 - days)}d left)` : '';
+
+      return `<tr>
+        <td><span class="mono">${p.portal_id}</span></td>
+        <td><span class="tier-badge tier-${tierClass}">${tierLabel}</span> <span class="mono">${daysLeft}</span></td>
+        <td><span class="mono">${new Date(p.trial_started_at).toLocaleDateString()}</span></td>
+        <td><span class="mono">${new Date(p.updated_at).toLocaleDateString()}</span></td>
+        <td>
+          <select id="tier-${p.portal_id}">
+            <option value="trial"    ${p.tier==='trial'?'selected':''}>Trial</option>
+            <option value="starter"  ${p.tier==='starter'?'selected':''}>Starter ($7)</option>
+            <option value="growth"   ${p.tier==='growth'?'selected':''}>Growth ($12)</option>
+            <option value="pro"      ${p.tier==='pro'?'selected':''}>Pro ($16)</option>
+            <option value="business" ${p.tier==='business'?'selected':''}>Business ($25)</option>
+          </select>
+        </td>
+        <td><button class="btn" onclick="saveTier('${p.portal_id}')">Save</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function saveTier(portalId) {
+    const tier = document.getElementById('tier-' + portalId).value;
+    await fetch('/admin/portals/' + portalId + '/tier', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier })
+    });
+    showToast('✓ Tier updated to ' + tier);
+    load();
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  load();
+  setInterval(load, 30000);
+</script>
+</body>
+</html>
