@@ -24,8 +24,7 @@
   .tab.active { color: var(--text); border-bottom-color: var(--accent); }
   .tab:hover { color: var(--text); }
 
-  .main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
-
+  .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
   .panel { display: none; }
   .panel.active { display: block; }
 
@@ -36,7 +35,7 @@
 
   table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px; }
   th { text-align: left; padding: 12px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); border-bottom: 1px solid var(--border); }
-  td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: var(--surface2); }
 
@@ -56,10 +55,7 @@
   .notif-error   { background: rgba(248,113,113,0.1); color: var(--error); }
   .notif-success { background: rgba(74,222,128,0.1); color: var(--success); }
 
-  select, input, textarea {
-    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 8px 12px; width: 100%;
-  }
+  select, input, textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 8px 12px; width: 100%; }
   select:focus, input:focus, textarea:focus { outline: none; border-color: var(--accent); }
 
   .btn { padding: 8px 16px; border-radius: 8px; border: none; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
@@ -76,15 +72,13 @@
   .form-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
 
   .mono { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
-  .usage-bar { height: 4px; background: var(--surface2); border-radius: 2px; width: 80px; display: inline-block; vertical-align: middle; overflow: hidden; }
-  .usage-fill { height: 100%; border-radius: 2px; background: var(--success); }
-  .usage-fill.warning { background: var(--warning); }
-  .usage-fill.danger { background: var(--error); }
+  .countdown-pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 11px; }
+  .countdown-ok      { background: rgba(74,222,128,0.1); color: var(--success); }
+  .countdown-warning { background: rgba(251,191,36,0.15); color: var(--warning); }
+  .countdown-danger  { background: rgba(248,113,113,0.1); color: var(--error); }
 
   .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--success); border-radius: 8px; padding: 12px 18px; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 300; }
   .toast.show { transform: translateY(0); opacity: 1; }
-
-  .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
   .actions-row { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
 </style>
 </head>
@@ -123,14 +117,15 @@
         <tr>
           <th>Portal ID</th>
           <th>Tier</th>
-          <th>Usage</th>
-          <th>Last Updated</th>
+          <th>Started</th>
+          <th>Expires / Renewed</th>
+          <th>Status</th>
           <th>Change Tier</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody id="portalTable">
-        <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Loading...</td></tr>
+        <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">Loading...</td></tr>
       </tbody>
     </table>
   </div>
@@ -144,8 +139,6 @@
           <label class="form-label">Send To</label>
           <select id="msgTarget" onchange="toggleSpecificPortal()">
             <option value="all">All Portals</option>
-            <option value="trial">Trial portals only</option>
-            <option value="paid">Paid portals only</option>
             <option value="specific">Specific Portal ID</option>
           </select>
         </div>
@@ -201,14 +194,7 @@
     </div>
     <table>
       <thead>
-        <tr>
-          <th>Portal</th>
-          <th>Type</th>
-          <th>Title</th>
-          <th>Message</th>
-          <th>Status</th>
-          <th>Sent</th>
-        </tr>
+        <tr><th>Portal</th><th>Type</th><th>Title</th><th>Message</th><th>Status</th><th>Sent</th></tr>
       </thead>
       <tbody id="historyTable">
         <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Loading...</td></tr>
@@ -242,6 +228,20 @@
     return fetch(url + (adminKey ? sep + 'key=' + adminKey : ''), options);
   }
 
+  function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function getTrialCountdown(trialStartedAt, tier) {
+    if (tier !== 'trial') return null;
+    const start    = new Date(trialStartedAt).getTime();
+    const expiry   = start + (14 * 24 * 60 * 60 * 1000);
+    const now      = Date.now();
+    const daysLeft = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+    return { daysLeft, expiry, isExpired: daysLeft <= 0 };
+  }
+
   async function loadPortals() {
     const res     = await apiFetch('/admin/portals');
     const data    = await res.json();
@@ -251,9 +251,9 @@
 
     portals.forEach(p => {
       if (p.tier === 'trial') {
-        const days = (now - new Date(p.trial_started_at).getTime()) / 86400000;
-        if (days > 14) expired++; else trial++;
-      } else if (p.tier !== 'cancelled' && p.tier !== 'suspended') {
+        const countdown = getTrialCountdown(p.trial_started_at, p.tier);
+        if (countdown?.isExpired) expired++; else trial++;
+      } else if (!['cancelled', 'suspended'].includes(p.tier)) {
         paid++;
         mrr += TIER_PRICES[p.tier] || 0;
       }
@@ -268,28 +268,42 @@
 
     const tbody = document.getElementById('portalTable');
     if (!portals.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">No portals yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">No portals yet</td></tr>';
       return;
     }
 
     tbody.innerHTML = portals.map(p => {
-      const days      = (now - new Date(p.trial_started_at).getTime()) / 86400000;
-      const isExpired = p.tier === 'trial' && days > 14;
-      const tierClass = isExpired ? 'expired' : p.tier;
-      const tierLabel = isExpired ? 'Expired' : p.tier.charAt(0).toUpperCase() + p.tier.slice(1);
-      const daysLeft  = p.tier === 'trial' && !isExpired ? `${Math.ceil(14 - days)}d left` : '';
+      const countdown  = getTrialCountdown(p.trial_started_at, p.tier);
+      const isExpired  = countdown?.isExpired;
+      const tierClass  = isExpired ? 'expired' : p.tier;
+      const tierLabel  = isExpired ? 'Trial Expired' : (p.tier.charAt(0).toUpperCase() + p.tier.slice(1));
+      const startDate  = formatDate(p.trial_started_at);
+      const expiryDate = p.tier === 'trial' ? formatDate(new Date(countdown?.expiry)) : '—';
+
+      let countdownHtml = '—';
+      if (p.tier === 'trial' && countdown) {
+        if (countdown.isExpired) {
+          countdownHtml = `<span class="countdown-pill countdown-danger">Expired</span>`;
+        } else if (countdown.daysLeft <= 3) {
+          countdownHtml = `<span class="countdown-pill countdown-danger">${countdown.daysLeft}d left</span>`;
+        } else if (countdown.daysLeft <= 7) {
+          countdownHtml = `<span class="countdown-pill countdown-warning">${countdown.daysLeft}d left</span>`;
+        } else {
+          countdownHtml = `<span class="countdown-pill countdown-ok">${countdown.daysLeft}d left</span>`;
+        }
+      } else if (!['trial', 'cancelled', 'suspended'].includes(p.tier)) {
+        countdownHtml = `<span class="countdown-pill countdown-ok">Active</span>`;
+      }
 
       return `<tr>
         <td>
-          <span class="mono">${p.portal_id}</span><br>
-          <a href="/settings?portalId=${p.portal_id}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">Open Settings ↗</a>
+          <span class="mono" style="font-size:13px">${p.portal_id}</span><br>
+          <a href="/settings?portalId=${p.portal_id}" target="_blank" style="color:var(--accent);font-size:11px;text-decoration:none">Open Settings ↗</a>
         </td>
-        <td>
-          <span class="tier-badge tier-${tierClass}">${tierLabel}</span>
-          ${daysLeft ? `<span class="mono" style="margin-left:6px">${daysLeft}</span>` : ''}
-        </td>
-        <td>—</td>
-        <td><span class="mono">${new Date(p.updated_at).toLocaleDateString()}</span></td>
+        <td><span class="tier-badge tier-${tierClass}">${tierLabel}</span></td>
+        <td><span class="mono">${startDate}</span></td>
+        <td><span class="mono">${expiryDate}</span></td>
+        <td>${countdownHtml}</td>
         <td>
           <select id="tier-${p.portal_id}" style="width:160px">
             <option value="trial"     ${p.tier==='trial'?'selected':''}>Trial</option>
@@ -381,12 +395,10 @@
     const data = await res.json();
     const notifications = data.notifications || [];
     const tbody = document.getElementById('historyTable');
-
     if (!notifications.length) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">No notifications sent yet</td></tr>';
       return;
     }
-
     tbody.innerHTML = notifications.map(n => `<tr>
       <td><span class="mono">${n.portal_id}</span></td>
       <td><span class="notif-badge notif-${n.type}">${n.type}</span></td>
