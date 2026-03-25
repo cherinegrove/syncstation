@@ -125,3 +125,4 @@ async function checkLimits(portalId, rules) {
 }
 
 module.exports = { getPortalTier, setPortalTier, getAllPortals, checkLimits, TIERS };
+cancelled: { name: 'Cancelled', maxRules: 0, maxMappings: 0, price: 0 };
