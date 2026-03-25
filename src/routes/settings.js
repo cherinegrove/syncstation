@@ -56,35 +56,40 @@ async function saveRules(portalId, rules) {
   memRulesStore[portalId] = rules;
 }
 
-// Known HubSpot object types as fallback
-const KNOWN_OBJECTS = [
-  { name: 'contacts',      label: 'Contacts' },
-  { name: 'companies',     label: 'Companies' },
-  { name: 'deals',         label: 'Deals' },
-  { name: 'tickets',       label: 'Tickets' },
-  { name: 'leads',         label: 'Leads' },
-  { name: 'products',      label: 'Products' },
-  { name: 'line_items',    label: 'Line Items' },
-  { name: 'quotes',        label: 'Quotes' },
-  { name: 'invoices',      label: 'Invoices' },
-  { name: 'orders',        label: 'Orders' },
-  { name: 'carts',         label: 'Carts' },
-  { name: 'appointments',  label: 'Appointments' },
-  { name: 'courses',       label: 'Courses' },
-  { name: 'listings',      label: 'Listings' },
-  { name: 'services',      label: 'Services' },
-  { name: 'goals',         label: 'Goals' },
-  { name: 'tasks',         label: 'Tasks' },
-  { name: 'calls',         label: 'Calls' },
-  { name: 'emails',        label: 'Emails' },
-  { name: 'meetings',      label: 'Meetings' },
-  { name: 'notes',         label: 'Notes' },
-  { name: 'communications', label: 'Communications' },
-  { name: 'postal_mail',   label: 'Postal Mail' },
-  { name: 'subscriptions', label: 'Subscriptions' },
-  { name: 'payments',      label: 'Payments' },
-  { name: 'discounts',     label: 'Discounts' }
+// All known object types to test
+const OBJECTS_TO_TEST = [
+  { name: 'contacts',        label: 'Contacts' },
+  { name: 'companies',       label: 'Companies' },
+  { name: 'deals',           label: 'Deals' },
+  { name: 'tickets',         label: 'Tickets' },
+  { name: 'leads',           label: 'Leads' },
+  { name: 'products',        label: 'Products' },
+  { name: 'line_items',      label: 'Line Items' },
+  { name: 'quotes',          label: 'Quotes' },
+  { name: 'invoices',        label: 'Invoices' },
+  { name: 'orders',          label: 'Orders' },
+  { name: 'carts',           label: 'Carts' },
+  { name: 'appointments',    label: 'Appointments' },
+  { name: 'courses',         label: 'Courses' },
+  { name: 'listings',        label: 'Listings' },
+  { name: 'services',        label: 'Services' },
+  { name: 'goals',           label: 'Goals' },
+  { name: 'tasks',           label: 'Tasks' },
+  { name: 'calls',           label: 'Calls' },
+  { name: 'emails',          label: 'Emails' },
+  { name: 'meetings',        label: 'Meetings' },
+  { name: 'notes',           label: 'Notes' },
+  { name: 'communications',  label: 'Communications' },
+  { name: 'postal_mail',     label: 'Postal Mail' },
+  { name: 'subscriptions',   label: 'Subscriptions' },
+  { name: 'payments',        label: 'Payments' },
+  { name: 'discounts',       label: 'Discounts' },
+  { name: 'marketing_events', label: 'Marketing Events' }
 ];
+
+// Cache available objects per portal (5 min TTL)
+const objectsCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // GET /settings
 router.get('/', (req, res) => {
@@ -108,45 +113,91 @@ router.post('/rules', async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /settings/objects — dynamically fetch all available object types for a portal
+// GET /settings/objects — test each object type and return only accessible ones
 router.get('/objects', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId', objects: KNOWN_OBJECTS });
+  const { portalId, refresh } = req.query;
+  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
+
+  // Check cache first
+  const cacheKey   = `objects-${portalId}`;
+  const cached     = objectsCache.get(cacheKey);
+  if (cached && !refresh && Date.now() - cached.ts < CACHE_TTL_MS) {
+    console.log(`[Settings] Returning cached objects for portal ${portalId}`);
+    return res.json({ objects: cached.objects, source: 'cache' });
+  }
 
   try {
-    const client = await getClient(portalId);
-    const axios  = require('axios');
+    const axios      = require('axios');
     const tokenStore = require('../services/tokenStore');
-    const tokens = await tokenStore.get(portalId);
+    const tokens     = await tokenStore.get(portalId);
 
     if (!tokens?.access_token) {
-      return res.json({ objects: KNOWN_OBJECTS, source: 'fallback' });
+      return res.json({ objects: OBJECTS_TO_TEST.slice(0, 5), source: 'fallback' });
     }
 
-    // Fetch all object schemas from HubSpot
-    const schemasRes = await axios.get(
-      'https://api-eu1.hubapi.com/crm/v3/schemas',
-      { headers: { Authorization: `Bearer ${tokens.access_token}` } }
-    );
+    const accessToken = tokens.access_token;
 
-    const customObjects = (schemasRes.data?.results || []).map(schema => ({
-      name:  schema.objectTypeId || schema.name,
-      label: schema.labels?.singular || schema.name,
-      custom: true
-    }));
+    // Test each object type in parallel by trying to fetch 1 property
+    const testObject = async (obj) => {
+      try {
+        const res = await axios.get(
+          `https://api-eu1.hubapi.com/crm/v3/properties/${obj.name}?limit=1`,
+          {
+            headers:        { Authorization: `Bearer ${accessToken}` },
+            timeout:        5000,
+            validateStatus: (s) => s < 500 // Don't throw on 4xx
+          }
+        );
+        if (res.status === 200) {
+          return { ...obj, accessible: true };
+        }
+        console.log(`[Settings] ${obj.name} not accessible (${res.status})`);
+        return null;
+      } catch (err) {
+        console.log(`[Settings] ${obj.name} test failed:`, err.message);
+        return null;
+      }
+    };
 
-    // Merge known objects with custom objects (deduplicate)
-    const knownNames   = new Set(KNOWN_OBJECTS.map(o => o.name));
-    const uniqueCustom = customObjects.filter(o => !knownNames.has(o.name));
-    const allObjects   = [...KNOWN_OBJECTS, ...uniqueCustom];
+    // Test all objects in parallel with concurrency limit
+    const BATCH_SIZE = 5;
+    const accessible = [];
 
-    console.log(`[Settings] Loaded ${allObjects.length} object types for portal ${portalId} (${uniqueCustom.length} custom)`);
-    res.json({ objects: allObjects, source: 'dynamic' });
+    for (let i = 0; i < OBJECTS_TO_TEST.length; i += BATCH_SIZE) {
+      const batch   = OBJECTS_TO_TEST.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(testObject));
+      accessible.push(...results.filter(Boolean));
+    }
+
+    // Also fetch custom objects
+    try {
+      const schemasRes = await axios.get(
+        'https://api-eu1.hubapi.com/crm/v3/schemas',
+        { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 5000 }
+      );
+      const knownNames    = new Set(OBJECTS_TO_TEST.map(o => o.name));
+      const customObjects = (schemasRes.data?.results || [])
+        .filter(s => !knownNames.has(s.name))
+        .map(s => ({
+          name:   s.objectTypeId || s.name,
+          label:  s.labels?.singular || s.name,
+          custom: true
+        }));
+      accessible.push(...customObjects);
+    } catch (err) {
+      console.log('[Settings] Could not fetch custom object schemas:', err.message);
+    }
+
+    console.log(`[Settings] Portal ${portalId} has access to ${accessible.length} object types`);
+
+    // Cache result
+    objectsCache.set(cacheKey, { objects: accessible, ts: Date.now() });
+
+    res.json({ objects: accessible, source: 'dynamic' });
 
   } catch (err) {
     console.error('[Settings] Objects error:', err.message);
-    // Return fallback list so UI still works
-    res.json({ objects: KNOWN_OBJECTS, source: 'fallback' });
+    res.json({ objects: OBJECTS_TO_TEST.slice(0, 5), source: 'fallback' });
   }
 });
 
@@ -162,7 +213,6 @@ router.get('/properties/:objectType', async (req, res) => {
 
     let properties = [];
 
-    // Try standard CRM properties API first
     try {
       const response = await client.crm.properties.coreApi.getAll(objectType);
       properties = (response.results || [])
@@ -170,13 +220,12 @@ router.get('/properties/:objectType', async (req, res) => {
         .sort((a, b) => a.label.localeCompare(b.label))
         .map(p => ({ name: p.name, label: p.label, type: p.type }));
     } catch (crmErr) {
-      // Try with axios for non-standard objects
+      // Fallback to axios for non-standard objects
       const axios      = require('axios');
       const tokenStore = require('../services/tokenStore');
       const tokens     = await tokenStore.get(portalId);
 
       if (tokens?.access_token) {
-        // Try v3 properties endpoint
         const propsRes = await axios.get(
           `https://api-eu1.hubapi.com/crm/v3/properties/${objectType}`,
           { headers: { Authorization: `Bearer ${tokens.access_token}` } }
@@ -186,12 +235,6 @@ router.get('/properties/:objectType', async (req, res) => {
           .sort((a, b) => a.label.localeCompare(b.label))
           .map(p => ({ name: p.name, label: p.label, type: p.type }));
       }
-    }
-
-    if (!properties.length) {
-      console.warn(`[Settings] No properties found for ${objectType}`);
-    } else {
-      console.log(`[Settings] Loaded ${properties.length} properties for ${objectType}`);
     }
 
     res.json({ properties });
