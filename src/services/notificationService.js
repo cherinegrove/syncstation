@@ -1,6 +1,5 @@
 // src/services/notificationService.js
 const { Pool } = require('pg');
-const axios    = require('axios');
 
 let pool = null;
 
@@ -34,7 +33,6 @@ function getPool() {
 // Initialize on module load
 getPool();
 
-// Create a notification for a portal
 async function createNotification(portalId, { type, title, message, actionLabel, actionUrl }) {
   const p = getPool();
   if (!p) {
@@ -47,7 +45,7 @@ async function createNotification(portalId, { type, title, message, actionLabel,
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [String(portalId), type || 'info', title, message, actionLabel || null, actionUrl || null]
     );
-    console.log(`[Notifications] Created notification ID ${result.rows[0].id} for portal ${portalId}: "${title}"`);
+    console.log(`[Notifications] Created ID ${result.rows[0].id} for portal ${portalId}: "${title}"`);
     return result.rows[0].id;
   } catch (err) {
     console.error('[Notifications] Create error:', err.message);
@@ -55,7 +53,6 @@ async function createNotification(portalId, { type, title, message, actionLabel,
   }
 }
 
-// Get unread notifications for a portal
 async function getNotifications(portalId, includeRead = false) {
   const p = getPool();
   if (!p) return [];
@@ -71,7 +68,6 @@ async function getNotifications(portalId, includeRead = false) {
   }
 }
 
-// Mark notification as read
 async function markRead(notificationId) {
   const p = getPool();
   if (!p) return;
@@ -85,7 +81,6 @@ async function markRead(notificationId) {
   }
 }
 
-// Mark all notifications as read for a portal
 async function markAllRead(portalId) {
   const p = getPool();
   if (!p) return;
@@ -99,7 +94,6 @@ async function markAllRead(portalId) {
   }
 }
 
-// Get all notifications (admin view)
 async function getAllNotifications(limit = 100) {
   const p = getPool();
   if (!p) return [];
@@ -115,68 +109,56 @@ async function getAllNotifications(limit = 100) {
   }
 }
 
-// Send email via Resend
-async function sendEmail(to, subject, html) {
-  if (!process.env.RESEND_API_KEY) {
-    console.log('[Email] No RESEND_API_KEY set, skipping email');
-    return;
-  }
-  try {
-    await axios.post('https://api.resend.com/emails', {
-      from: process.env.RESEND_FROM_EMAIL || 'PropBridge <noreply@resend.dev>',
-      to,
-      subject,
-      html
-    }, {
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }
-    });
-    console.log(`[Email] Sent to ${to}: ${subject}`);
-  } catch (err) {
-    console.error('[Email] Send error:', err.response?.data || err.message);
-  }
-}
-
-// Send notification (in-app + optionally email)
 async function notify(portalId, notification, emailTo = null) {
   const id = await createNotification(portalId, notification);
   if (emailTo && id) {
+    const { sendEmail } = require('./emailService');
+    const BASE = process.env.APP_BASE_URL || ('https://' + process.env.RAILWAY_PUBLIC_DOMAIN);
     await sendEmail(
       emailTo,
       notification.title,
-      `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:40px">
+      `<div style="font-family:sans-serif;max-width:560px;margin:40px auto;padding:32px;background:#18181c;border-radius:12px;color:#f0f0f4">
         <h2 style="color:#ff6b35">⇄ PropBridge</h2>
         <h3>${notification.title}</h3>
-        <p>${notification.message}</p>
+        <p style="color:#c0c0d0">${notification.message}</p>
         ${notification.actionLabel && notification.actionUrl
-          ? `<a href="${notification.actionUrl}" style="background:#ff6b35;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:16px">${notification.actionLabel}</a>`
+          ? `<a href="${BASE}${notification.actionUrl}" style="background:#ff6b35;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:16px">${notification.actionLabel}</a>`
           : ''}
-        <p style="color:#999;margin-top:32px;font-size:12px">PropBridge — HubSpot Property Sync</p>
       </div>`
     );
   }
   return id;
 }
 
-// Run automated notification checks
 async function runAutomatedChecks() {
   const p = getPool();
   if (!p) return;
 
   try {
-    const { getAllPortals } = require('./tierService');
-    const { getRules }      = require('../routes/settings');
-    const { TIERS }         = require('./tierService');
+    const { getAllPortals, TIERS } = require('./tierService');
+    const { getRules }             = require('../routes/settings');
+    const tokenStore               = require('./tokenStore');
+    const { sendTrialEnding, sendTrialExpired } = require('./emailService');
+
     const portals = await getAllPortals();
 
     for (const portal of portals) {
       const portalId = portal.portal_id;
       const tier     = portal.tier;
-      const rules    = await getRules(portalId);
       const tierInfo = TIERS[tier] || TIERS.trial;
 
       if (!tierInfo.maxRules) continue; // Skip suspended/cancelled
 
-      // Check usage > 90%
+      // Get installer email
+      let installerEmail = null;
+      try {
+        const tokens = await tokenStore.get(portalId);
+        installerEmail = tokens?.installerEmail || null;
+      } catch (e) {}
+
+      const rules    = await getRules(portalId);
+
+      // Usage > 90%
       const usagePct = (rules.length / tierInfo.maxRules) * 100;
       if (usagePct >= 90 && usagePct < 100) {
         const recent = await p.query(
@@ -195,25 +177,46 @@ async function runAutomatedChecks() {
         }
       }
 
-      // Trial expiring in 3 days
+      // Trial checks
       if (tier === 'trial') {
         const daysSince = (Date.now() - new Date(portal.trial_started_at).getTime()) / 86400000;
-        const daysLeft  = 14 - daysSince;
+        const daysLeft  = Math.ceil(14 - daysSince);
 
-        if (daysLeft <= 3 && daysLeft > 0) {
+        // Trial expiring — 7 days
+        if (daysLeft === 7) {
           const recent = await p.query(
             `SELECT id FROM notifications WHERE portal_id = $1
-             AND title LIKE '%trial%' AND created_at > NOW() - INTERVAL '3 days'`,
+             AND title LIKE '%7 day%' AND created_at > NOW() - INTERVAL '2 days'`,
             [portalId]
           );
           if (!recent.rows.length) {
             await createNotification(portalId, {
               type:        'warning',
-              title:       `Your free trial expires in ${Math.ceil(daysLeft)} day${Math.ceil(daysLeft) !== 1 ? 's' : ''}`,
+              title:       'Your free trial expires in 7 days',
+              message:     'Upgrade now to keep your sync rules active.',
+              actionLabel: 'View Plans',
+              actionUrl:   `/account?portalId=${portalId}`
+            });
+            if (installerEmail) await sendTrialEnding(installerEmail, portalId, 7);
+          }
+        }
+
+        // Trial expiring — 3 days
+        if (daysLeft <= 3 && daysLeft > 0) {
+          const recent = await p.query(
+            `SELECT id FROM notifications WHERE portal_id = $1
+             AND title LIKE '%3 day%' AND created_at > NOW() - INTERVAL '2 days'`,
+            [portalId]
+          );
+          if (!recent.rows.length) {
+            await createNotification(portalId, {
+              type:        'warning',
+              title:       `Your free trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
               message:     'Upgrade now to keep your sync rules active after your trial ends.',
               actionLabel: 'View Plans',
               actionUrl:   `/account?portalId=${portalId}`
             });
+            if (installerEmail) await sendTrialEnding(installerEmail, portalId, daysLeft);
           }
         }
 
@@ -232,6 +235,7 @@ async function runAutomatedChecks() {
               actionLabel: 'Upgrade Now',
               actionUrl:   `/account?portalId=${portalId}`
             });
+            if (installerEmail) await sendTrialExpired(installerEmail, portalId);
           }
         }
       }
@@ -247,7 +251,6 @@ module.exports = {
   getNotifications,
   markRead,
   markAllRead,
-  sendEmail,
   notify,
   getAllNotifications,
   runAutomatedChecks
