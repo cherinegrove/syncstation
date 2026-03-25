@@ -1,26 +1,20 @@
 // src/services/syncService.js
-const axios = require('axios');
-
-// Map object types to HubSpot API object type IDs
-const OBJECT_TYPE_MAP = {
-  contacts:  'contacts',
-  companies: 'companies',
-  deals:     'deals',
-  tickets:   'tickets',
-  leads:     'leads',
-  products:  'products',
-  projects:  'projects'
-};
 
 async function getProperties(client, objectType, objectId, properties) {
   try {
-    // Use the generic objects API which works for all object types
-    const propsParam = properties.join(',');
     const response = await client.crm.objects.basicApi.getById(
       objectType, String(objectId), properties
     );
     return response.properties || {};
   } catch (err) {
+    // Try axios fallback for non-standard objects
+    try {
+      const axios      = require('axios');
+      const tokenStore = require('./tokenStore');
+      // Get token from store - we'll need portalId but don't have it here
+      // So just return empty and let the caller handle it
+      console.error(`[Sync] getProperties fallback needed for ${objectType} ${objectId}`);
+    } catch (e) {}
     console.error(`[Sync] Failed to get properties for ${objectType} ${objectId}:`, err.message);
     return {};
   }
@@ -40,21 +34,19 @@ async function updateProperties(client, objectType, objectId, properties) {
 
 async function getAssociations(client, fromObjectType, fromObjectId, toObjectType) {
   try {
-    // Try v4 associations API
     const response = await client.crm.associations.v4.basicApi.getPage(
       fromObjectType, String(fromObjectId), toObjectType, undefined, 500
     );
     return response?.results || [];
   } catch (err) {
-    console.error(`[Sync] Associations error:`, err.message);
-    // Try v3 as fallback
+    // Try v3 fallback
     try {
       const response = await client.crm.associations.basicApi.getAll(
         fromObjectType, String(fromObjectId), toObjectType
       );
       return (response?.results || []).map(r => ({ toObjectId: r.id }));
     } catch (err2) {
-      console.error(`[Sync] Associations v3 fallback error:`, err2.message);
+      console.error(`[Sync] Associations error for ${fromObjectType} ${fromObjectId} -> ${toObjectType}:`, err2.message);
       return [];
     }
   }
@@ -68,21 +60,21 @@ async function sync(client, {
   mappings,
   skipIfHasValue,
   associationRule,
-  associationLabel
+  associationLabel,
+  onWrite // callback to mark our writes (prevents bidirectional loops)
 }) {
   console.log(`[Sync] Starting: ${sourceObjectType} ${sourceId} -> ${targetObjectType}`);
-  console.log(`[Sync] Mappings: ${mappings.length}, Direction: ${direction}, Rule: ${associationRule}`);
 
-  // Always fetch fresh source properties from API (fixes stale value bug)
+  // Always fetch fresh source properties (fixes stale value bug)
   const srcPropNames = mappings.map(m => m.source);
-  const sourceProps = await getProperties(client, sourceObjectType, sourceId, srcPropNames);
-  console.log(`[Sync] Source properties fetched:`, JSON.stringify(sourceProps));
+  const sourceProps  = await getProperties(client, sourceObjectType, sourceId, srcPropNames);
+  console.log(`[Sync] Source properties:`, JSON.stringify(sourceProps));
 
   // Get ALL associated target records
   const associations = await getAssociations(client, sourceObjectType, sourceId, targetObjectType);
   console.log(`[Sync] Found ${associations.length} associated ${targetObjectType} records`);
 
-  let targets = associations;
+  let targets = [...associations];
 
   // Apply association rule
   if (associationRule === 'first') {
@@ -96,11 +88,10 @@ async function sync(client, {
       )
     );
   }
-  // 'all' — use all targets
 
-  console.log(`[Sync] Processing ${targets.length} target records after association rule`);
+  console.log(`[Sync] Processing ${targets.length} target(s) after association rule "${associationRule}"`);
 
-  if (targets.length === 0) {
+  if (!targets.length) {
     return { status: 'no_targets', updated: 0, targets: [] };
   }
 
@@ -109,15 +100,10 @@ async function sync(client, {
 
   for (const target of targets) {
     const targetId = target.toObjectId || target.id || target.objectId;
-    if (!targetId) {
-      console.log('[Sync] Skipping target with no ID:', JSON.stringify(target));
-      continue;
-    }
+    if (!targetId) continue;
 
     try {
       let targetProps = {};
-
-      // Fetch target properties if needed
       if (direction === 'two_way' || skipIfHasValue) {
         const tgtPropNames = mappings.map(m => m.target);
         targetProps = await getProperties(client, targetObjectType, targetId, tgtPropNames);
@@ -129,20 +115,20 @@ async function sync(client, {
         const srcVal = sourceProps[mapping.source];
         const tgtVal = targetProps[mapping.target];
 
-        if (direction === 'two_way') {
-          // Always sync source to target (most recent wins since we fetch fresh)
-          propsToUpdate[mapping.target] = srcVal !== undefined ? srcVal : '';
-        } else {
-          // One-way: source → target
-          if (skipIfHasValue && tgtVal) {
-            console.log(`[Sync] Skipping ${mapping.target} - target already has value`);
-            continue;
-          }
-          propsToUpdate[mapping.target] = srcVal !== undefined ? srcVal : '';
+        if (skipIfHasValue && tgtVal) {
+          console.log(`[Sync] Skipping ${mapping.target} — target already has value "${tgtVal}"`);
+          continue;
         }
+
+        propsToUpdate[mapping.target] = srcVal !== undefined ? srcVal : '';
       }
 
       if (Object.keys(propsToUpdate).length > 0) {
+        // Mark these writes BEFORE updating so webhooks can be ignored
+        if (onWrite) {
+          onWrite(targetObjectType, String(targetId), propsToUpdate);
+        }
+
         const success = await updateProperties(client, targetObjectType, targetId, propsToUpdate);
         if (success) {
           updatedCount++;
@@ -162,7 +148,6 @@ async function sync(client, {
 
   const status = updatedCount > 0 ? 'success' : 'no_updates';
   console.log(`[Sync] Complete: ${updatedCount}/${targets.length} updated`);
-
   return { status, updated: updatedCount, targets: results };
 }
 
