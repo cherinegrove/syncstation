@@ -2,7 +2,9 @@
 const express = require('express');
 const router  = express.Router();
 const path    = require('path');
-const { getPortalTier } = require('../services/tierService');
+const { getPortalTier, setPortalTier, TIERS } = require('../services/tierService');
+const { createNotification } = require('../services/notificationService');
+const { getRules } = require('./settings');
 const { Pool } = require('pg');
 
 let pool = null;
@@ -25,7 +27,6 @@ router.get('/tier', async (req, res) => {
 
   const tierInfo = await getPortalTier(portalId);
 
-  // Get trial_started_at from DB
   let trial_started_at = null;
   try {
     const p = getPool();
@@ -40,10 +41,67 @@ router.get('/tier', async (req, res) => {
     console.error('[Account] Get trial date error:', err.message);
   }
 
-  res.json({ ...tierInfo, trial_started_at });
+  // Get current usage
+  const rules         = await getRules(portalId);
+  const totalMappings = rules.reduce((sum, r) => sum + (r.mappings?.length || 0), 0);
+  const maxMappingsPerRule = rules.length ? Math.max(...rules.map(r => r.mappings?.length || 0)) : 0;
+
+  res.json({
+    ...tierInfo,
+    trial_started_at,
+    usage: {
+      rules:       rules.length,
+      mappings:    totalMappings,
+      maxMappingsPerRule
+    }
+  });
 });
 
-// POST /account/upgrade-request
+// POST /account/change-tier — self-serve tier change
+router.post('/change-tier', async (req, res) => {
+  const { portalId, newTier } = req.body;
+
+  if (!portalId || !newTier) return res.status(400).json({ error: 'Missing portalId or newTier' });
+  if (!TIERS[newTier]) return res.status(400).json({ error: 'Invalid tier' });
+
+  const currentTierInfo = await getPortalTier(portalId);
+  const newTierInfo     = TIERS[newTier];
+  const rules           = await getRules(portalId);
+  const maxMappingsPerRule = rules.length ? Math.max(...rules.map(r => r.mappings?.length || 0)) : 0;
+
+  // Check if downgrade is allowed
+  if (newTierInfo.maxRules < rules.length) {
+    return res.status(400).json({
+      ok: false,
+      blocked: true,
+      reason: `You currently have ${rules.length} sync rules but the ${newTierInfo.name} plan only allows ${newTierInfo.maxRules}. Please delete ${rules.length - newTierInfo.maxRules} rule(s) before downgrading.`
+    });
+  }
+
+  if (newTierInfo.maxMappings < maxMappingsPerRule) {
+    return res.status(400).json({
+      ok: false,
+      blocked: true,
+      reason: `One of your rules has ${maxMappingsPerRule} property mappings but the ${newTierInfo.name} plan only allows ${newTierInfo.maxMappings} per rule. Please reduce your mappings before downgrading.`
+    });
+  }
+
+  // All good — change the tier
+  await setPortalTier(portalId, newTier);
+  console.log(`[Account] Portal ${portalId} changed tier from ${currentTierInfo.tier} to ${newTier}`);
+
+  // Send confirmation notification
+  const isUpgrade = newTierInfo.price > (TIERS[currentTierInfo.tier]?.price || 0);
+  await createNotification(portalId, {
+    type:    'success',
+    title:   `Plan ${isUpgrade ? 'upgraded' : 'changed'} to ${newTierInfo.name}`,
+    message: `Your account is now on the ${newTierInfo.name} plan. You now have ${newTierInfo.maxRules} sync rules and ${newTierInfo.maxMappings} mappings per rule.`
+  });
+
+  res.json({ ok: true, tier: newTier, tierInfo: newTierInfo });
+});
+
+// POST /account/upgrade-request — manual request fallback
 router.post('/upgrade-request', async (req, res) => {
   const { portalId, tier, name, email } = req.body;
   console.log(`[Account] Upgrade request from portal ${portalId}: ${name} <${email}> wants ${tier}`);
