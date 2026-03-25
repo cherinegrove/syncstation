@@ -4,7 +4,9 @@ const router  = express.Router();
 const path    = require('path');
 const { getPortalTier, setPortalTier, TIERS } = require('../services/tierService');
 const { createNotification } = require('../services/notificationService');
+const { sendPlanChanged, sendAdminNotification } = require('../services/emailService');
 const { getRules } = require('./settings');
+const tokenStore = require('../services/tokenStore');
 const { Pool } = require('pg');
 
 let pool = null;
@@ -13,6 +15,15 @@ function getPool() {
     pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   }
   return pool;
+}
+
+async function getInstallerEmail(portalId) {
+  try {
+    const tokens = await tokenStore.get(portalId);
+    return tokens?.installerEmail || null;
+  } catch (err) {
+    return null;
+  }
 }
 
 // GET /account
@@ -41,19 +52,14 @@ router.get('/tier', async (req, res) => {
     console.error('[Account] Get trial date error:', err.message);
   }
 
-  // Get current usage
-  const rules         = await getRules(portalId);
-  const totalMappings = rules.reduce((sum, r) => sum + (r.mappings?.length || 0), 0);
+  const rules              = await getRules(portalId);
+  const totalMappings      = rules.reduce((sum, r) => sum + (r.mappings?.length || 0), 0);
   const maxMappingsPerRule = rules.length ? Math.max(...rules.map(r => r.mappings?.length || 0)) : 0;
 
   res.json({
     ...tierInfo,
     trial_started_at,
-    usage: {
-      rules:       rules.length,
-      mappings:    totalMappings,
-      maxMappingsPerRule
-    }
+    usage: { rules: rules.length, mappings: totalMappings, maxMappingsPerRule }
   });
 });
 
@@ -64,9 +70,9 @@ router.post('/change-tier', async (req, res) => {
   if (!portalId || !newTier) return res.status(400).json({ error: 'Missing portalId or newTier' });
   if (!TIERS[newTier]) return res.status(400).json({ error: 'Invalid tier' });
 
-  const currentTierInfo = await getPortalTier(portalId);
-  const newTierInfo     = TIERS[newTier];
-  const rules           = await getRules(portalId);
+  const currentTierInfo    = await getPortalTier(portalId);
+  const newTierInfo        = TIERS[newTier];
+  const rules              = await getRules(portalId);
   const maxMappingsPerRule = rules.length ? Math.max(...rules.map(r => r.mappings?.length || 0)) : 0;
 
   // Check if downgrade is allowed
@@ -86,26 +92,32 @@ router.post('/change-tier', async (req, res) => {
     });
   }
 
-  // All good — change the tier
+  // Change the tier
+  const fromTier = currentTierInfo.tier;
   await setPortalTier(portalId, newTier);
-  console.log(`[Account] Portal ${portalId} changed tier from ${currentTierInfo.tier} to ${newTier}`);
+  console.log(`[Account] Portal ${portalId} changed tier from ${fromTier} to ${newTier}`);
 
-  // Send confirmation notification
-  const isUpgrade = newTierInfo.price > (TIERS[currentTierInfo.tier]?.price || 0);
+  // Send in-app notification
+  const isUpgrade = newTierInfo.price > (TIERS[fromTier]?.price || 0);
   await createNotification(portalId, {
     type:    'success',
     title:   `Plan ${isUpgrade ? 'upgraded' : 'changed'} to ${newTierInfo.name}`,
-    message: `Your account is now on the ${newTierInfo.name} plan. You now have ${newTierInfo.maxRules} sync rules and ${newTierInfo.maxMappings} mappings per rule.`
+    message: `Your account is now on the ${newTierInfo.name} plan. You have ${newTierInfo.maxRules} sync rules and ${newTierInfo.maxMappings} mappings per rule.`
   });
 
-  res.json({ ok: true, tier: newTier, tierInfo: newTierInfo });
-});
+  // Send email confirmation
+  const email = await getInstallerEmail(portalId);
+  if (email) {
+    await sendPlanChanged(email, portalId, fromTier, newTier, newTierInfo);
+  }
 
-// POST /account/upgrade-request — manual request fallback
-router.post('/upgrade-request', async (req, res) => {
-  const { portalId, tier, name, email } = req.body;
-  console.log(`[Account] Upgrade request from portal ${portalId}: ${name} <${email}> wants ${tier}`);
-  res.json({ ok: true });
+  // Notify admin
+  await sendAdminNotification(
+    `Portal ${portalId} changed plan`,
+    `Portal ${portalId} changed from ${fromTier} to ${newTier}. Installer email: ${email || 'unknown'}.`
+  );
+
+  res.json({ ok: true, tier: newTier, tierInfo: newTierInfo });
 });
 
 module.exports = router;
