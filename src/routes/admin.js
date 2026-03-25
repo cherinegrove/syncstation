@@ -3,7 +3,7 @@ const express    = require('express');
 const router     = express.Router();
 const path       = require('path');
 const { getPortalTier, setPortalTier, getAllPortals, TIERS } = require('../services/tierService');
-const { notify, getAllNotifications, runAutomatedChecks }    = require('../services/notificationService');
+const { createNotification, getAllNotifications, runAutomatedChecks } = require('../services/notificationService');
 
 function requireAdmin(req, res, next) {
   const key = req.query.key || req.headers['x-admin-key'];
@@ -27,7 +27,7 @@ router.get('/portals', requireAdmin, async (req, res) => {
 // POST /admin/portals/:portalId/tier
 router.post('/portals/:portalId/tier', requireAdmin, async (req, res) => {
   const { portalId } = req.params;
-  const { tier } = req.body;
+  const { tier }     = req.body;
   if (!TIERS[tier]) return res.status(400).json({ error: 'Invalid tier' });
   await setPortalTier(portalId, tier);
   console.log(`[Admin] Portal ${portalId} tier set to ${tier}`);
@@ -40,18 +40,36 @@ router.post('/notify', requireAdmin, async (req, res) => {
 
   if (!title || !message) return res.status(400).json({ error: 'Missing title or message' });
 
-  if (all) {
-    const portals = await getAllPortals();
-    for (const portal of portals) {
-      await notify(portal.portal_id, { type, title, message, actionLabel, actionUrl });
+  const notification = {
+    type:        type || 'info',
+    title,
+    message,
+    actionLabel: actionLabel || null,
+    actionUrl:   actionUrl || null
+  };
+
+  let sent = 0;
+
+  try {
+    if (all) {
+      const portals = await getAllPortals();
+      for (const portal of portals) {
+        await createNotification(portal.portal_id, notification);
+        sent++;
+      }
+      console.log(`[Admin] Sent notification to all ${sent} portals: "${title}"`);
+    } else if (portalId) {
+      await createNotification(String(portalId), notification);
+      sent = 1;
+      console.log(`[Admin] Sent notification to portal ${portalId}: "${title}"`);
+    } else {
+      return res.status(400).json({ error: 'Provide portalId or all:true' });
     }
-    console.log(`[Admin] Sent notification to all ${portals.length} portals`);
-    res.json({ ok: true, sent: portals.length });
-  } else if (portalId) {
-    await notify(portalId, { type, title, message, actionLabel, actionUrl });
-    res.json({ ok: true, sent: 1 });
-  } else {
-    res.status(400).json({ error: 'Provide portalId or all:true' });
+
+    res.json({ ok: true, sent });
+  } catch (err) {
+    console.error('[Admin] Notify error:', err.message);
+    res.status(500).json({ error: err.message, sent: 0 });
   }
 });
 
