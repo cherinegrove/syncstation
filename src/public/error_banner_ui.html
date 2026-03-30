@@ -1,0 +1,235 @@
+<!-- ADD TO settings.html - Error notification banner -->
+
+<div id="sync-errors-banner" style="display: none;">
+  <div class="error-banner">
+    <div class="error-banner-header">
+      <span class="error-icon">⚠️</span>
+      <strong>Sync Issues Detected</strong>
+      <button onclick="dismissAllErrors()" class="btn-dismiss-all">Dismiss All</button>
+    </div>
+    <div id="error-list"></div>
+  </div>
+</div>
+
+<style>
+.error-banner {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.error-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.error-banner-header .error-icon {
+  font-size: 24px;
+}
+
+.error-banner-header strong {
+  flex: 1;
+  font-size: 16px;
+  color: #856404;
+}
+
+.btn-dismiss-all {
+  background: transparent;
+  border: 1px solid #856404;
+  color: #856404;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.btn-dismiss-all:hover {
+  background: #856404;
+  color: white;
+}
+
+#error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.error-item {
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 4px solid #ff9800;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.error-item.error-type-permission_denied {
+  border-left-color: #f44336;
+}
+
+.error-item.error-type-custom_object_unavailable {
+  border-left-color: #ff9800;
+}
+
+.error-item.error-type-property_not_found {
+  border-left-color: #ffc107;
+}
+
+.error-content {
+  flex: 1;
+}
+
+.error-rule-name {
+  font-weight: bold;
+  color: #424242;
+  margin-bottom: 4px;
+}
+
+.error-message {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.error-meta {
+  font-size: 12px;
+  color: #999;
+}
+
+.error-count {
+  background: #ff9800;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.btn-dismiss {
+  background: transparent;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.btn-dismiss:hover {
+  color: #666;
+}
+</style>
+
+<script>
+// Load and display sync errors
+async function loadSyncErrors() {
+  try {
+    const response = await fetch(`/errors?portalId=${PORTAL_ID}`);
+    const data = await response.json();
+    
+    if (data.errors && data.errors.length > 0) {
+      displaySyncErrors(data.errors);
+    } else {
+      document.getElementById('sync-errors-banner').style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Failed to load sync errors:', err);
+  }
+}
+
+function displaySyncErrors(errors) {
+  const banner = document.getElementById('sync-errors-banner');
+  const errorList = document.getElementById('error-list');
+  
+  const errorHtml = errors.map(err => {
+    const timeAgo = formatTimeAgo(new Date(err.last_seen));
+    const errorClass = `error-type-${err.error_type}`;
+    
+    return `
+      <div class="error-item ${errorClass}" data-error-id="${err.id}">
+        <div class="error-content">
+          <div class="error-rule-name">Rule: ${err.rule_name}</div>
+          <div class="error-message">${err.error_message}</div>
+          <div class="error-meta">
+            ${err.object_type ? `Object: ${err.object_type} • ` : ''}
+            Last seen ${timeAgo}
+            ${err.error_count > 1 ? `• <span class="error-count">${err.error_count}×</span>` : ''}
+          </div>
+        </div>
+        <button class="btn-dismiss" onclick="dismissError(${err.id})" title="Dismiss">×</button>
+      </div>
+    `;
+  }).join('');
+  
+  errorList.innerHTML = errorHtml;
+  banner.style.display = 'block';
+}
+
+async function dismissError(errorId) {
+  try {
+    await fetch(`/errors/dismiss/${errorId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId: PORTAL_ID })
+    });
+    
+    // Remove from UI
+    const errorElement = document.querySelector(`[data-error-id="${errorId}"]`);
+    if (errorElement) {
+      errorElement.remove();
+    }
+    
+    // Hide banner if no errors left
+    const remaining = document.querySelectorAll('.error-item');
+    if (remaining.length === 0) {
+      document.getElementById('sync-errors-banner').style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Failed to dismiss error:', err);
+  }
+}
+
+async function dismissAllErrors() {
+  try {
+    await fetch('/errors/dismiss-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId: PORTAL_ID })
+    });
+    
+    document.getElementById('sync-errors-banner').style.display = 'none';
+  } catch (err) {
+    console.error('Failed to dismiss all errors:', err);
+  }
+}
+
+function formatTimeAgo(date) {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+// Load errors on page load
+document.addEventListener('DOMContentLoaded', () => {
+  loadSyncErrors();
+  // Refresh errors every 5 minutes
+  setInterval(loadSyncErrors, 5 * 60 * 1000);
+});
+</script>
