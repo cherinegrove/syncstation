@@ -1,0 +1,112 @@
+/* ADD TO settings.html <style> section */
+
+/* Validation error container */
+#validation-errors {
+  display: none;
+  margin: 20px 0;
+  padding: 15px;
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  border-radius: 4px;
+}
+
+/* Individual error styling */
+.validation-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.validation-error:last-child {
+  margin-bottom: 0;
+}
+
+/* Error types */
+.error-tier {
+  border-left: 4px solid #ff9800; /* Orange for tier issues */
+}
+
+.error-permission {
+  border-left: 4px solid #f44336; /* Red for permission issues */
+}
+
+.error-config {
+  border-left: 4px solid #ffc107; /* Yellow for config issues */
+}
+
+/* Error icons */
+.error-icon {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Error content */
+.error-content {
+  flex: 1;
+}
+
+.error-content strong {
+  display: block;
+  color: #d32f2f;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.error-content p {
+  margin: 0;
+  color: #424242;
+  line-height: 1.5;
+}
+
+/* Warning styling */
+.validation-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #fff9e6;
+  border-left: 4px solid #ffc107;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.warning-icon {
+  font-size: 20px;
+}
+
+.validation-warning p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Success state */
+.validation-success {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #e8f5e9;
+  border-left: 4px solid #4caf50;
+  border-radius: 4px;
+}
+
+/* Add this container to your modal */
+.rule-form {
+  position: relative;
+}
+
+/* Disable save button when validation fails */
+.save-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
