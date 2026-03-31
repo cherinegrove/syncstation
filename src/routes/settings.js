@@ -4,6 +4,7 @@ const router        = express.Router();
 const path          = require('path');
 const { getClient } = require('../services/hubspotClient');
 const { Pool }      = require('pg');
+const { validateMapping, getCompatibleTypes } = require('../utils/fieldTypeCompatibility');
 
 let pool = null;
 
@@ -104,13 +105,117 @@ router.get('/rules', async (req, res) => {
   res.json({ rules });
 });
 
-// POST /settings/rules
+// POST /settings/rules - WITH FIELD TYPE VALIDATION
 router.post('/rules', async (req, res) => {
   const { portalId, rules } = req.body;
   if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-  await saveRules(portalId, rules || []);
-  console.log(`[Settings] Saved ${rules?.length || 0} rules for portal ${portalId}`);
-  res.json({ ok: true });
+  
+  // Validate each rule's mappings for field type compatibility
+  try {
+    const client = await getClient(portalId);
+    const validationErrors = [];
+    const validationWarnings = [];
+    
+    for (const rule of rules || []) {
+      if (!rule.mappings || rule.mappings.length === 0) continue;
+      
+      // Fetch properties for source and target objects
+      let sourceProperties = [];
+      let targetProperties = [];
+      
+      try {
+        const sourceRes = await client.crm.properties.coreApi.getAll(rule.sourceObject);
+        sourceProperties = sourceRes.results || [];
+      } catch (err) {
+        console.log(`[Validation] Could not fetch ${rule.sourceObject} properties:`, err.message);
+      }
+      
+      try {
+        const targetRes = await client.crm.properties.coreApi.getAll(rule.targetObject);
+        targetProperties = targetRes.results || [];
+      } catch (err) {
+        console.log(`[Validation] Could not fetch ${rule.targetObject} properties:`, err.message);
+      }
+      
+      // Validate each mapping in the rule
+      for (const mapping of rule.mappings) {
+        const sourceProp = sourceProperties.find(p => p.name === mapping.source);
+        const targetProp = targetProperties.find(p => p.name === mapping.target);
+        
+        if (!sourceProp || !targetProp) {
+          validationErrors.push({
+            rule: rule.name,
+            mapping: `${mapping.source} → ${mapping.target}`,
+            error: 'Property not found'
+          });
+          continue;
+        }
+        
+        // Validate field type compatibility
+        const validation = validateMapping(
+          {
+            name: sourceProp.name,
+            label: sourceProp.label,
+            type: sourceProp.type,
+            options: sourceProp.options || []
+          },
+          {
+            name: targetProp.name,
+            label: targetProp.label,
+            type: targetProp.type,
+            options: targetProp.options || []
+          }
+        );
+        
+        if (!validation.valid) {
+          validationErrors.push({
+            rule: rule.name,
+            mapping: `${sourceProp.label} → ${targetProp.label}`,
+            error: validation.error || 'Incompatible field types'
+          });
+        }
+        
+        if (validation.warning) {
+          validationWarnings.push({
+            rule: rule.name,
+            mapping: `${sourceProp.label} → ${targetProp.label}`,
+            warning: validation.warning
+          });
+        }
+      }
+    }
+    
+    // If there are validation errors, reject the save
+    if (validationErrors.length > 0) {
+      console.log(`[Settings] Validation failed for portal ${portalId}:`, validationErrors);
+      return res.status(400).json({
+        error: 'Field type validation failed',
+        validationErrors,
+        validationWarnings
+      });
+    }
+    
+    // If only warnings (no errors), save but return warnings
+    if (validationWarnings.length > 0) {
+      console.log(`[Settings] Validation warnings for portal ${portalId}:`, validationWarnings);
+    }
+    
+    await saveRules(portalId, rules || []);
+    console.log(`[Settings] Saved ${rules?.length || 0} rules for portal ${portalId}`);
+    res.json({ 
+      ok: true,
+      validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined
+    });
+    
+  } catch (err) {
+    console.error('[Settings] Error saving rules:', err.message);
+    // Fall back to saving without validation if validation fails
+    await saveRules(portalId, rules || []);
+    res.json({ 
+      ok: true,
+      warning: 'Rules saved but validation could not be performed'
+    });
+  }
 });
 
 // GET /settings/objects — test each object type and return only accessible ones
@@ -201,7 +306,7 @@ router.get('/objects', async (req, res) => {
   }
 });
 
-// GET /settings/properties/:objectType
+// GET /settings/properties/:objectType - NOW WITH FULL TYPE INFO
 router.get('/properties/:objectType', async (req, res) => {
   const { objectType } = req.params;
   const { portalId }   = req.query;
@@ -218,7 +323,13 @@ router.get('/properties/:objectType', async (req, res) => {
       properties = (response.results || [])
         .filter(p => !p.hidden && !p.calculated)
         .sort((a, b) => a.label.localeCompare(b.label))
-        .map(p => ({ name: p.name, label: p.label, type: p.type }));
+        .map(p => ({
+          name: p.name,
+          label: p.label,
+          type: p.type,              // string, number, enumeration, bool, date, datetime
+          fieldType: p.fieldType,    // text, textarea, select, number, date, etc.
+          options: p.options || []   // For dropdowns/enumerations
+        }));
     } catch (crmErr) {
       // Fallback to axios for non-standard objects
       const axios      = require('axios');
@@ -233,7 +344,13 @@ router.get('/properties/:objectType', async (req, res) => {
         properties = (propsRes.data?.results || [])
           .filter(p => !p.hidden && !p.calculated)
           .sort((a, b) => a.label.localeCompare(b.label))
-          .map(p => ({ name: p.name, label: p.label, type: p.type }));
+          .map(p => ({
+            name: p.name,
+            label: p.label,
+            type: p.type,
+            fieldType: p.fieldType,
+            options: p.options || []
+          }));
       }
     }
 
@@ -249,6 +366,58 @@ router.get('/properties/:objectType', async (req, res) => {
       });
     }
     res.status(500).json({ error: err.message, properties: [] });
+  }
+});
+
+// NEW ENDPOINT: Validate a single mapping
+router.post('/validate-mapping', async (req, res) => {
+  const { portalId, sourceObject, targetObject, sourceProperty, targetProperty } = req.body;
+  
+  if (!portalId || !sourceObject || !targetObject || !sourceProperty || !targetProperty) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  
+  try {
+    const client = await getClient(portalId);
+    
+    // Fetch source and target properties
+    const sourceRes = await client.crm.properties.coreApi.getAll(sourceObject);
+    const targetRes = await client.crm.properties.coreApi.getAll(targetObject);
+    
+    const sourceProp = (sourceRes.results || []).find(p => p.name === sourceProperty);
+    const targetProp = (targetRes.results || []).find(p => p.name === targetProperty);
+    
+    if (!sourceProp || !targetProp) {
+      return res.json({ 
+        valid: false, 
+        error: 'Property not found' 
+      });
+    }
+    
+    // Validate the mapping
+    const validation = validateMapping(
+      {
+        name: sourceProp.name,
+        label: sourceProp.label,
+        type: sourceProp.type,
+        options: sourceProp.options || []
+      },
+      {
+        name: targetProp.name,
+        label: targetProp.label,
+        type: targetProp.type,
+        options: targetProp.options || []
+      }
+    );
+    
+    res.json(validation);
+    
+  } catch (err) {
+    console.error('[Validation] Error:', err.message);
+    res.status(500).json({ 
+      valid: false, 
+      error: 'Validation failed: ' + err.message 
+    });
   }
 });
 
