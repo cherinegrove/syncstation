@@ -15,6 +15,7 @@ const COMPATIBILITY_MAP = {
   'phonenumber': ['phonenumber', 'string'],
   'email': ['email', 'string'],
   'multiselect': ['multiselect', 'textarea'],
+  'file': ['file'],  // File to file only
 };
 
 /**
@@ -47,7 +48,8 @@ function getTypeName(type) {
     'bool': 'Checkbox',
     'phonenumber': 'Phone number',
     'email': 'Email',
-    'multiselect': 'Multiple checkboxes'
+    'multiselect': 'Multiple checkboxes',
+    'file': 'File'
   };
   return typeNames[type] || type;
 }
