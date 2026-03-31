@@ -63,6 +63,19 @@ router.post('/receive', async (req, res) => {
   }
 });
 
+// Helper to properly pluralize object types (handles irregular plurals)
+function pluralize(objectType) {
+  if (!objectType) return objectType;
+  if (objectType.endsWith('s')) return objectType;
+  
+  // Handle irregular plurals
+  const irregulars = {
+    'company': 'companies'
+  };
+  
+  return irregulars[objectType] || objectType + 's';
+}
+
 async function processWebhookEvent(event) {
   const {
     portalId,
@@ -84,8 +97,8 @@ async function processWebhookEvent(event) {
     return;
   }
 
-  // Pluralize object type for API consistency
-  const pluralObjectType = objectType.endsWith('s') ? objectType : `${objectType}s`;
+  // Pluralize object type for API consistency (handle irregular plurals)
+  const pluralObjectType = pluralize(objectType);
 
   // Check if this was our own write (prevent loops)
   if (wasRecentlyWritten(pluralObjectType, String(objectId), propertyName)) {
