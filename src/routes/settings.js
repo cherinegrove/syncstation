@@ -59,33 +59,14 @@ async function saveRules(portalId, rules) {
 
 // All known object types to test
 const OBJECTS_TO_TEST = [
-  { name: 'contacts',        label: 'Contacts' },
-  { name: 'companies',       label: 'Companies' },
-  { name: 'deals',           label: 'Deals' },
-  { name: 'tickets',         label: 'Tickets' },
-  { name: 'leads',           label: 'Leads' },
-  { name: 'products',        label: 'Products' },
-  { name: 'line_items',      label: 'Line Items' },
-  { name: 'quotes',          label: 'Quotes' },
-  { name: 'invoices',        label: 'Invoices' },
-  { name: 'orders',          label: 'Orders' },
-  { name: 'carts',           label: 'Carts' },
-  { name: 'appointments',    label: 'Appointments' },
-  { name: 'courses',         label: 'Courses' },
-  { name: 'listings',        label: 'Listings' },
-  { name: 'services',        label: 'Services' },
-  { name: 'goals',           label: 'Goals' },
-  { name: 'tasks',           label: 'Tasks' },
-  { name: 'calls',           label: 'Calls' },
-  { name: 'emails',          label: 'Emails' },
-  { name: 'meetings',        label: 'Meetings' },
-  { name: 'notes',           label: 'Notes' },
-  { name: 'communications',  label: 'Communications' },
-  { name: 'postal_mail',     label: 'Postal Mail' },
-  { name: 'subscriptions',   label: 'Subscriptions' },
-  { name: 'payments',        label: 'Payments' },
-  { name: 'discounts',       label: 'Discounts' },
-  { name: 'marketing_events', label: 'Marketing Events' }
+  { name: 'contacts',  label: 'Contacts' },
+  { name: 'companies', label: 'Companies' },
+  { name: 'deals',     label: 'Deals' },
+  { name: 'tickets',   label: 'Tickets' },
+  { name: 'leads',     label: 'Leads' },
+  { name: 'services',  label: 'Services' },
+  { name: 'courses',   label: 'Courses' },
+  { name: 'listings',  label: 'Listings' }
 ];
 
 // Cache available objects per portal (5 min TTL)
@@ -279,23 +260,29 @@ router.get('/objects', async (req, res) => {
       accessible.push(...results.filter(Boolean));
     }
 
-    // Also fetch custom objects
+    // Also fetch custom objects (only Projects)
     try {
       const schemasRes = await axios.get(
         'https://api-eu1.hubapi.com/crm/v3/schemas',
         { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 5000 }
       );
-      const knownNames    = new Set(OBJECTS_TO_TEST.map(o => o.name));
+      const knownNames = new Set(OBJECTS_TO_TEST.map(o => o.name));
+      
+      // Only include Projects from custom objects
       const customObjects = (schemasRes.data?.results || [])
-        .filter(s => !knownNames.has(s.name))
+        .filter(s => !knownNames.has(s.name) && s.name === 'projects')
         .map(s => ({
           name:         s.name,
           objectTypeId: s.objectTypeId || s.name,
-          label:        s.labels?.singular || s.name,
+          label:        s.labels?.singular || s.name || 'Projects',
           custom:       true,
           accessible:   true
         }));
       accessible.push(...customObjects);
+      
+      if (customObjects.length > 0) {
+        console.log(`[Settings] Added Projects with objectTypeId: ${customObjects[0].objectTypeId}`);
+      }
     } catch (err) {
       console.log('[Settings] Could not fetch custom object schemas:', err.message);
     }
