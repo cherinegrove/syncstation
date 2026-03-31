@@ -254,7 +254,12 @@ router.get('/objects', async (req, res) => {
           }
         );
         if (res.status === 200) {
-          return { ...obj, accessible: true };
+          return { 
+            name: obj.name,
+            objectTypeId: obj.objectTypeId || obj.name, // Use objectTypeId if available, else name
+            label: obj.label,
+            accessible: true 
+          };
         }
         console.log(`[Settings] ${obj.name} not accessible (${res.status})`);
         return null;
@@ -284,9 +289,11 @@ router.get('/objects', async (req, res) => {
       const customObjects = (schemasRes.data?.results || [])
         .filter(s => !knownNames.has(s.name))
         .map(s => ({
-          name:   s.objectTypeId || s.name,
-          label:  s.labels?.singular || s.name,
-          custom: true
+          name:         s.name,
+          objectTypeId: s.objectTypeId || s.name,
+          label:        s.labels?.singular || s.name,
+          custom:       true,
+          accessible:   true
         }));
       accessible.push(...customObjects);
     } catch (err) {
