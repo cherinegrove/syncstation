@@ -63,7 +63,7 @@ async function setLastSyncTime(portalId, objectType) {
   }
 }
 
-// Get all portals that have active sync rules for Leads or Projects
+// Get all portals that have active sync rules for Contacts, Leads or Projects
 async function getPortalsWithPollingRules() {
   const p = getPool();
   if (!p) {
@@ -81,10 +81,11 @@ async function getPortalsWithPollingRules() {
       const portalId = row.portal_id;
       const rules = row.rules || [];
       
-      // Check if any rule involves leads or projects
+      // Check if any rule involves contacts, leads or projects
       const hasPollingRule = rules.some(rule => 
         rule.enabled && 
-        (rule.sourceObject === 'leads' || rule.targetObject === 'leads' ||
+        (rule.sourceObject === 'contacts' || rule.targetObject === 'contacts' ||
+         rule.sourceObject === 'leads' || rule.targetObject === 'leads' ||
          rule.sourceObject === 'projects' || rule.targetObject === 'projects')
       );
       
@@ -254,6 +255,11 @@ async function runPollingCycle() {
     let totalErrors = 0;
     
     for (const portalId of portals) {
+      // Poll Contacts
+      const contactsResult = await pollObjectType(portalId, 'contacts');
+      totalSynced += contactsResult.synced;
+      totalErrors += contactsResult.errors;
+      
       // Poll Leads
       const leadsResult = await pollObjectType(portalId, 'leads');
       totalSynced += leadsResult.synced;
