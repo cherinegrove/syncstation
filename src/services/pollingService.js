@@ -1,34 +1,31 @@
 // src/services/pollingService.js
 const { getClient } = require('./hubspotClient');
 const { sync } = require('./syncService');
+const { Pool } = require('pg');
 
-// Try to load database connection - adjust this path if needed
-let pool;
-try {
-  pool = require('../db');
-} catch (e) {
-  try {
-    pool = require('../database');
-  } catch (e2) {
-    try {
-      const db = require('../config/database');
-      pool = db.pool || db;
-    } catch (e3) {
-      console.error('[Polling] Could not find database module. Please check database import path.');
-    }
+let pool = null;
+
+function getPool() {
+  if (!pool && process.env.DATABASE_URL) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
   }
+  return pool;
 }
 
 // Track last sync time per portal
 async function getLastSyncTime(portalId, objectType) {
-  if (!pool) {
+  const p = getPool();
+  if (!p) {
     const yesterday = new Date();
     yesterday.setHours(yesterday.getHours() - 24);
     return yesterday.toISOString();
   }
   
   try {
-    const result = await pool.query(
+    const result = await p.query(
       'SELECT last_sync_time FROM polling_sync_times WHERE portal_id = $1 AND object_type = $2',
       [portalId, objectType]
     );
@@ -49,11 +46,12 @@ async function getLastSyncTime(portalId, objectType) {
 }
 
 async function setLastSyncTime(portalId, objectType) {
-  if (!pool) return;
+  const p = getPool();
+  if (!p) return;
   
   const now = new Date().toISOString();
   try {
-    await pool.query(
+    await p.query(
       `INSERT INTO polling_sync_times (portal_id, object_type, last_sync_time, updated_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (portal_id, object_type) 
@@ -67,17 +65,35 @@ async function setLastSyncTime(portalId, objectType) {
 
 // Get all portals that have active sync rules for Leads or Projects
 async function getPortalsWithPollingRules() {
-  if (!pool) return [];
+  const p = getPool();
+  if (!p) {
+    console.log('[Polling] No database - cannot fetch portals');
+    return [];
+  }
   
   try {
-    const result = await pool.query(
-      `SELECT DISTINCT portal_id 
-       FROM sync_rules 
-       WHERE enabled = true 
-         AND (source_object IN ('leads', 'projects') 
-           OR target_object IN ('leads', 'projects'))`
-    );
-    return result.rows.map(r => r.portal_id);
+    // Get all portals with rules from sync_rules table
+    const result = await p.query('SELECT portal_id, rules FROM sync_rules');
+    
+    const portalsWithPollingRules = [];
+    
+    for (const row of result.rows) {
+      const portalId = row.portal_id;
+      const rules = row.rules || [];
+      
+      // Check if any rule involves leads or projects
+      const hasPollingRule = rules.some(rule => 
+        rule.enabled && 
+        (rule.sourceObject === 'leads' || rule.targetObject === 'leads' ||
+         rule.sourceObject === 'projects' || rule.targetObject === 'projects')
+      );
+      
+      if (hasPollingRule) {
+        portalsWithPollingRules.push(portalId);
+      }
+    }
+    
+    return portalsWithPollingRules;
   } catch (err) {
     console.error('[Polling] Error getting portals:', err.message);
     return [];
@@ -86,30 +102,32 @@ async function getPortalsWithPollingRules() {
 
 // Get sync rules for a specific portal and object type
 async function getSyncRulesForPolling(portalId, objectType) {
-  if (!pool) return [];
+  const p = getPool();
+  if (!p) return [];
   
   try {
-    const result = await pool.query(
-      `SELECT * FROM sync_rules 
-       WHERE portal_id = $1 
-         AND enabled = true 
-         AND (source_object = $2 OR (target_object = $2 AND direction = 'two_way'))
-       ORDER BY created_at`,
-      [portalId, objectType]
-    );
+    const result = await p.query('SELECT rules FROM sync_rules WHERE portal_id = $1', [portalId]);
     
-    return result.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      sourceObject: row.source_object,
-      targetObject: row.target_object,
-      direction: row.direction,
-      mappings: row.mappings,
-      skipIfHasValue: row.skip_if_has_value,
-      assocRule: row.assoc_rule,
-      assocLabel: row.assoc_label,
-      enabled: row.enabled
-    }));
+    if (result.rows.length === 0) {
+      return [];
+    }
+    
+    const allRules = result.rows[0].rules || [];
+    
+    // Filter for rules that involve this object type
+    const relevantRules = allRules.filter(rule => {
+      if (!rule.enabled) return false;
+      
+      // Include if source matches
+      if (rule.sourceObject === objectType) return true;
+      
+      // Include if target matches and direction is two-way
+      if (rule.targetObject === objectType && rule.direction === 'two_way') return true;
+      
+      return false;
+    });
+    
+    return relevantRules;
   } catch (err) {
     console.error('[Polling] Error getting sync rules:', err.message);
     return [];
@@ -257,13 +275,14 @@ async function runPollingCycle() {
 
 // Initialize polling sync times table
 async function initPollingTable() {
-  if (!pool) {
+  const p = getPool();
+  if (!p) {
     console.log('[Polling] No database connection - polling will work with 24hr lookback only');
     return;
   }
   
   try {
-    await pool.query(`
+    await p.query(`
       CREATE TABLE IF NOT EXISTS polling_sync_times (
         portal_id TEXT NOT NULL,
         object_type TEXT NOT NULL,
