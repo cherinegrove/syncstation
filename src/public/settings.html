@@ -571,6 +571,250 @@
   <div class="page-title">Sync Rules</div>
   <div class="page-subtitle">Automatically sync property values between associated CRM objects.</div>
 
+<!-- PLAN COMPATIBILITY PANEL -->
+<button class="btn-show-info" onclick="document.getElementById('planInfoPanel').style.display = (document.getElementById('planInfoPanel').style.display === 'none' ? 'block' : 'none')">
+  📊 View Plan Compatibility
+</button>
+
+<div class="plan-info-panel" id="planInfoPanel" style="display:none">
+  <div class="plan-header">
+    <span class="info-icon">ℹ️</span>
+    <strong>HubSpot Plan Limitations & Sync Timing</strong>
+    <button class="close-panel" onclick="document.getElementById('planInfoPanel').style.display='none'">×</button>
+  </div>
+  
+  <div class="plan-content">
+    <table class="plan-table">
+      <thead>
+        <tr>
+          <th>Object Type</th>
+          <th>Sales Hub Pro</th>
+          <th>Sales Hub Enterprise</th>
+          <th>Sync Method</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="available">
+          <td><strong>Contacts</strong></td>
+          <td>✅ Full Access</td>
+          <td>✅ Full Access</td>
+          <td>Webhook (instant)</td>
+        </tr>
+        <tr class="available">
+          <td><strong>Companies</strong></td>
+          <td>✅ Full Access</td>
+          <td>✅ Full Access</td>
+          <td>Webhook (instant)</td>
+        </tr>
+        <tr class="available">
+          <td><strong>Deals</strong></td>
+          <td>✅ Full Access</td>
+          <td>✅ Full Access</td>
+          <td>Webhook (instant)</td>
+        </tr>
+        <tr class="available">
+          <td><strong>Tickets</strong></td>
+          <td>✅ Full Access</td>
+          <td>✅ Full Access</td>
+          <td>Webhook (instant)</td>
+        </tr>
+        <tr class="available">
+          <td><strong>Leads</strong></td>
+          <td>✅ Full Access</td>
+          <td>✅ Full Access</td>
+          <td>Polling (15 min delay)</td>
+        </tr>
+        <tr class="limited">
+          <td><strong>Projects</strong></td>
+          <td>⚠️ Read Only</td>
+          <td>✅ Full Access</td>
+          <td>Polling (15 min delay)</td>
+        </tr>
+        <tr class="unavailable">
+          <td><strong>Custom Objects</strong></td>
+          <td>❌ No Access</td>
+          <td>✅ Full Access</td>
+          <td>Polling (15 min delay)</td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <div class="plan-legend">
+      <div class="legend-item">
+        <span class="legend-icon">✅</span>
+        <span><strong>Full Access:</strong> Read & write via API</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-icon">⚠️</span>
+        <span><strong>Read Only:</strong> Can sync FROM this object only</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-icon">❌</span>
+        <span><strong>No Access:</strong> API unavailable</span>
+      </div>
+    </div>
+    
+    <div class="plan-note">
+      <strong>⚡ Sync Timing:</strong><br>
+      • <strong>Webhook (instant):</strong> Changes sync within seconds<br>
+      • <strong>Polling (15 min):</strong> Changes sync every 15 minutes<br><br>
+      
+      <strong>⚠️ Common Issue:</strong> "Authentication credentials not found"<br>
+      This means the target object requires Enterprise plan or is read-only.<br><br>
+      
+      <strong>💡 Solution for Projects on Pro:</strong><br>
+      Create <strong>one-way sync rules</strong> that sync <strong>FROM Projects TO</strong> other objects.<br>
+      Example: "Projects → Deals" works ✅ | "Deals → Projects" fails ❌
+    </div>
+  </div>
+</div>
+
+<style>
+  .btn-show-info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  
+  .btn-show-info:hover {
+    border-color: var(--accent);
+    background: rgba(255,107,53,0.05);
+    transform: translateY(-1px);
+  }
+
+  .plan-info-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 32px;
+    animation: slideDown 0.3s ease;
+  }
+  
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .plan-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    font-size: 16px;
+    color: var(--text);
+  }
+  
+  .info-icon {
+    font-size: 20px;
+  }
+  
+  .close-panel {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  
+  .close-panel:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  
+  .plan-content {
+    font-size: 13px;
+  }
+  
+  .plan-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  
+  .plan-table th {
+    text-align: left;
+    padding: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--text);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .plan-table td {
+    padding: 12px;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  
+  .plan-table tr.available {
+    background: rgba(74, 222, 128, 0.05);
+  }
+  
+  .plan-table tr.limited {
+    background: rgba(251, 191, 36, 0.05);
+  }
+  
+  .plan-table tr.unavailable {
+    background: rgba(248, 113, 113, 0.05);
+  }
+  
+  .plan-legend {
+    display: flex;
+    gap: 24px;
+    padding: 16px;
+    background: var(--surface2);
+    border-radius: 6px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .legend-icon {
+    font-size: 16px;
+  }
+  
+  .plan-note {
+    padding: 16px;
+    background: rgba(96, 165, 250, 0.08);
+    border-left: 3px solid #60a5fa;
+    border-radius: 4px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  
+  .plan-note strong {
+    color: var(--text);
+  }
+</style>
+
+
   <div class="stats-bar">
     <div class="stat-card">
       <div class="stat-value" id="statTotal">0</div>
@@ -605,25 +849,13 @@
       <div class="form-group">
         <label>Source Object</label>
         <select id="sourceObject" onchange="loadProperties()">
-          <option value="">Select object...</option>
-          <option value="contacts">Contacts</option>
-          <option value="companies">Companies</option>
-          <option value="deals">Deals</option>
-          <option value="tickets">Tickets</option>
-          <option value="leads">Leads</option>
-          <option value="projects">Projects</option>
+          <option value="">Loading objects...</option>
         </select>
       </div>
       <div class="form-group">
         <label>Target Object</label>
         <select id="targetObject" onchange="loadProperties()">
-          <option value="">Select object...</option>
-          <option value="contacts">Contacts</option>
-          <option value="companies">Companies</option>
-          <option value="deals">Deals</option>
-          <option value="tickets">Tickets</option>
-          <option value="leads">Leads</option>
-          <option value="projects">Projects</option>
+          <option value="">Loading objects...</option>
         </select>
       </div>
       <div class="form-group">
@@ -682,6 +914,7 @@
   let editingId = null;
   let sourceProps = [];
   let targetProps = [];
+  let availableObjects = []; // Will be populated from API
 
   const urlParams = new URLSearchParams(window.location.search);
   const portalId  = urlParams.get('portalId') || 'Demo';
@@ -689,6 +922,62 @@
   document.getElementById('portalBadge').textContent  = 'Portal ' + portalId;
   document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
   document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
+
+  // Load available objects from HubSpot
+  async function loadAvailableObjects() {
+    try {
+      const response = await fetch('/settings/objects?portalId=' + portalId);
+      const data = await response.json();
+      
+      // Standard objects that always work
+      const standardObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts', standard: true },
+        { objectTypeId: 'companies', label: 'Companies', standard: true },
+        { objectTypeId: 'deals', label: 'Deals', standard: true },
+        { objectTypeId: 'tickets', label: 'Tickets', standard: true },
+        { objectTypeId: 'leads', label: 'Leads', standard: true }
+      ];
+      
+      // Add custom objects from API (like Projects)
+      const customObjects = (data.objects || [])
+        .filter(obj => !standardObjects.find(s => s.label === obj.label))
+        .map(obj => ({
+          objectTypeId: obj.objectTypeId || obj.name,
+          label: obj.label || obj.name,
+          custom: true
+        }));
+      
+      availableObjects = [...standardObjects, ...customObjects];
+      
+      // Populate dropdowns
+      populateObjectDropdowns();
+      
+    } catch (err) {
+      console.error('[Settings] Failed to load objects:', err);
+      // Fallback to standard objects only
+      availableObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts' },
+        { objectTypeId: 'companies', label: 'Companies' },
+        { objectTypeId: 'deals', label: 'Deals' },
+        { objectTypeId: 'tickets', label: 'Tickets' },
+        { objectTypeId: 'leads', label: 'Leads' }
+      ];
+      populateObjectDropdowns();
+    }
+  }
+
+  function populateObjectDropdowns() {
+    const sourceSelect = document.getElementById('sourceObject');
+    const targetSelect = document.getElementById('targetObject');
+    
+    const options = '<option value="">Select object...</option>' + 
+      availableObjects.map(obj => 
+        `<option value="${obj.objectTypeId}">${obj.label}${obj.custom ? ' (Custom)' : ''}</option>`
+      ).join('');
+    
+    sourceSelect.innerHTML = options;
+    targetSelect.innerHTML = options;
+  }
 
   // Load notifications
   async function loadNotifications() {
@@ -1061,6 +1350,9 @@
 
   // Load notifications
   loadNotifications();
+  
+  // Load available objects (including correct Projects object type ID)
+  loadAvailableObjects();
 </script>
 </body>
 </html>
