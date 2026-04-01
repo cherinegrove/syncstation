@@ -64,7 +64,7 @@ const OBJECTS_TO_TEST = [
   { name: 'deals',     label: 'Deals' },
   { name: 'tickets',   label: 'Tickets' },
   { name: 'leads',     label: 'Leads' },
-  { name: 'projects',  label: 'Projects' },
+  { name: 'projects',  label: 'Projects', objectTypeId: '0-970' },  // Hardcoded for portal 26123886
   { name: 'services',  label: 'Services' },
   { name: 'courses',   label: 'Courses' },
   { name: 'listings',  label: 'Listings' }
@@ -224,6 +224,49 @@ router.get('/objects', async (req, res) => {
 
     const accessToken = tokens.access_token;
 
+    // First, fetch custom object schemas to get correct objectTypeId for projects
+    let projectsObjectTypeId = 'projects'; // fallback
+    try {
+      console.log('[Settings] Attempting to fetch schemas from /crm/v3/schemas...');
+      console.log('[Settings] Using access token:', accessToken ? `${accessToken.substring(0, 20)}...` : 'MISSING');
+      
+      const schemasRes = await axios.get(
+        'https://api-eu1.hubapi.com/crm/v3/schemas',
+        { 
+          headers: { Authorization: `Bearer ${accessToken}` }, 
+          timeout: 10000  // Increased timeout
+        }
+      );
+      
+      console.log('[Settings] Schemas API response status:', schemasRes.status);
+      console.log('[Settings] Schemas API returned:', schemasRes.data?.results?.length || 0, 'schemas');
+      console.log('[Settings] All schemas:', JSON.stringify(schemasRes.data?.results || [], null, 2));
+      
+      const projectSchema = (schemasRes.data?.results || []).find(s => 
+        s.name?.toLowerCase() === 'projects' || 
+        s.labels?.singular?.toLowerCase() === 'project'
+      );
+      
+      if (projectSchema) {
+        projectsObjectTypeId = projectSchema.objectTypeId || projectSchema.name;
+        console.log(`[Settings] ✅ Found Projects with objectTypeId: ${projectsObjectTypeId}`);
+      } else {
+        console.log('[Settings] ⚠️ Projects not found in schemas API response');
+      }
+    } catch (err) {
+      console.error('[Settings] ❌ Schemas API error:', err.message);
+      console.error('[Settings] Error details:', err.response?.status, err.response?.data);
+      console.error('[Settings] This means the OAuth token likely does not have crm.schemas.* scopes');
+    }
+
+    // Update OBJECTS_TO_TEST to include correct Projects objectTypeId
+    const objectsToTest = OBJECTS_TO_TEST.map(obj => {
+      if (obj.name === 'projects') {
+        return { ...obj, objectTypeId: projectsObjectTypeId };
+      }
+      return obj;
+    });
+
     // Test each object type in parallel by trying to fetch 1 property
     const testObject = async (obj) => {
       try {
@@ -255,63 +298,10 @@ router.get('/objects', async (req, res) => {
     const BATCH_SIZE = 5;
     const accessible = [];
 
-    for (let i = 0; i < OBJECTS_TO_TEST.length; i += BATCH_SIZE) {
-      const batch   = OBJECTS_TO_TEST.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < objectsToTest.length; i += BATCH_SIZE) {
+      const batch   = objectsToTest.slice(i, i + BATCH_SIZE);
       const results = await Promise.all(batch.map(testObject));
       accessible.push(...results.filter(Boolean));
-    }
-
-    // Also fetch custom objects (Projects and any that match your list)
-    try {
-      const schemasRes = await axios.get(
-        'https://api-eu1.hubapi.com/crm/v3/schemas',
-        { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 5000 }
-      );
-      
-      const knownNames = new Set(OBJECTS_TO_TEST.map(o => o.name));
-      
-      // DEBUG: Log all schemas to see what we got
-      console.log('[Settings] All schemas from API:', 
-        (schemasRes.data?.results || []).map(s => ({
-          name: s.name,
-          objectTypeId: s.objectTypeId,
-          label: s.labels?.singular
-        }))
-      );
-      
-      // Include Projects (flexible matching) and objects already in our list
-      const customObjects = (schemasRes.data?.results || [])
-        .filter(s => {
-          // Skip if already in known objects
-          if (knownNames.has(s.name)) {
-            console.log(`[Settings] Skipping ${s.name} (already in OBJECTS_TO_TEST)`);
-            return false;
-          }
-          
-          // Include if name or label contains "project" (case insensitive)
-          const nameMatch = s.name?.toLowerCase().includes('project');
-          const labelMatch = s.labels?.singular?.toLowerCase().includes('project');
-          
-          if (nameMatch || labelMatch) {
-            console.log(`[Settings] Including ${s.name} as Projects (objectTypeId: ${s.objectTypeId})`);
-          }
-          
-          return nameMatch || labelMatch;
-        })
-        .map(s => ({
-          name:         s.name,
-          objectTypeId: s.objectTypeId || s.name,
-          label:        s.labels?.singular || s.name || 'Projects',
-          custom:       true,
-          accessible:   true
-        }));
-      
-      accessible.push(...customObjects);
-      
-      console.log(`[Settings] Found ${customObjects.length} custom objects matching 'project':`, 
-        customObjects.map(o => `${o.label} (${o.objectTypeId})`));
-    } catch (err) {
-      console.log('[Settings] Could not fetch custom object schemas:', err.message);
     }
 
     console.log(`[Settings] Portal ${portalId} has access to ${accessible.length} object types`);
