@@ -95,11 +95,19 @@ function parseApiError(err, objectType) {
 }
 
 // Get properties for both standard and custom objects
-async function getProperties(client, objectType, objectId, properties) {
+async function getProperties(client, objectType, objectId, properties, portalId) {
   try {
     // For custom objects, use direct axios call to ensure proper endpoint
     if (isCustomObject(objectType)) {
-      const accessToken = client.accessToken || client._accessToken;
+      // Get access token from tokenStore, not from client
+      const tokenStore = require('./tokenStore');
+      const tokens = await tokenStore.get(portalId);
+      
+      if (!tokens?.access_token) {
+        throw new Error('No access token found for portal');
+      }
+      
+      const accessToken = tokens.access_token;
       const propertyList = Array.isArray(properties) ? properties.join(',') : properties;
       
       const url = `https://api-eu1.hubapi.com/crm/v3/objects/${objectType}/${objectId}`;
@@ -132,11 +140,19 @@ async function getProperties(client, objectType, objectId, properties) {
 }
 
 // Update properties for both standard and custom objects
-async function updateProperties(client, objectType, objectId, properties) {
+async function updateProperties(client, objectType, objectId, properties, portalId) {
   try {
     // For custom objects, use direct axios call
     if (isCustomObject(objectType)) {
-      const accessToken = client.accessToken || client._accessToken;
+      // Get access token from tokenStore, not from client
+      const tokenStore = require('./tokenStore');
+      const tokens = await tokenStore.get(portalId);
+      
+      if (!tokens?.access_token) {
+        throw new Error('No access token found for portal');
+      }
+      
+      const accessToken = tokens.access_token;
       
       const url = `https://api-eu1.hubapi.com/crm/v3/objects/${objectType}/${objectId}`;
       await axios.patch(url, {
@@ -205,6 +221,7 @@ async function getAssociations(client, fromObjectType, fromObjectId, toObjectTyp
 }
 
 async function sync(client, {
+  portalId, // ADDED: Need portalId to fetch tokens for custom objects
   sourceObjectType,
   sourceId,
   targetObjectType,
@@ -247,7 +264,7 @@ async function sync(client, {
   let sourceProps;
   
   try {
-    sourceProps = await getProperties(client, sourceObjectType, sourceId, srcPropNames);
+    sourceProps = await getProperties(client, sourceObjectType, sourceId, srcPropNames, portalId);
     console.log(`[Sync] Source properties:`, JSON.stringify(sourceProps));
   } catch (err) {
     syncResult.status = 'error';
@@ -309,7 +326,7 @@ async function sync(client, {
       if (direction === 'two_way' || skipIfHasValue) {
         const tgtPropNames = effectiveMappings.map(m => m.target);
         try {
-          targetProps = await getProperties(client, targetObjectType, targetId, tgtPropNames);
+          targetProps = await getProperties(client, targetObjectType, targetId, tgtPropNames, portalId);
         } catch (err) {
           // Log but continue - we can still try to update
           console.error(`[Sync] Warning: Could not fetch target properties for ${targetObjectType} ${targetId}`);
@@ -341,7 +358,7 @@ async function sync(client, {
           onWrite(targetObjectType, String(targetId), propsToUpdate);
         }
 
-        const updateResult = await updateProperties(client, targetObjectType, targetId, propsToUpdate);
+        const updateResult = await updateProperties(client, targetObjectType, targetId, propsToUpdate, portalId);
         
         if (updateResult.success) {
           updatedCount++;
@@ -370,80 +387,4 @@ async function sync(client, {
         results.push({ id: targetId, status: 'skipped' });
       }
     } catch (err) {
-      console.error(`[Sync] Failed for target ${targetId}:`, err.message);
-      results.push({ 
-        id: targetId, 
-        status: 'error', 
-        error: err.message 
-      });
-      syncResult.errors.push({
-        stage: 'process_target',
-        targetId,
-        message: err.message
-      });
-    }
-  }
-
-  syncResult.status = updatedCount > 0 ? 'success' : 'no_updates';
-  syncResult.updated = updatedCount;
-  syncResult.targets = results;
-  
-  console.log(`[Sync] Complete: ${updatedCount}/${targets.length} updated`);
-  
-  if (syncResult.errors.length > 0) {
-    console.log(`[Sync] Encountered ${syncResult.errors.length} error(s)`);
-  }
-  if (syncResult.warnings.length > 0) {
-    console.log(`[Sync] Encountered ${syncResult.warnings.length} warning(s)`);
-  }
-  
-  return syncResult;
-}
-
-// Validation function to check if a sync rule can be created
-async function validateSyncRule(client, sourceObjectType, targetObjectType, mappings) {
-  const validation = {
-    valid: true,
-    errors: [],
-    warnings: []
-  };
-
-  // Test source object access
-  try {
-    await client.crm.objects.basicApi.getById(sourceObjectType, '1', ['hs_object_id']);
-  } catch (err) {
-    if (err.response?.status === 403) {
-      validation.valid = false;
-      const errorInfo = parseApiError(err, sourceObjectType);
-      validation.errors.push({
-        field: 'sourceObject',
-        message: errorInfo.userMessage,
-        type: errorInfo.type
-      });
-    }
-  }
-
-  // Test target object access
-  try {
-    await client.crm.objects.basicApi.getById(targetObjectType, '1', ['hs_object_id']);
-  } catch (err) {
-    if (err.response?.status === 403) {
-      validation.valid = false;
-      const errorInfo = parseApiError(err, targetObjectType);
-      validation.errors.push({
-        field: 'targetObject',
-        message: errorInfo.userMessage,
-        type: errorInfo.type
-      });
-    }
-  }
-
-  return validation;
-}
-
-module.exports = { 
-  sync, 
-  validateSyncRule,
-  ERROR_TYPES,
-  isCustomObject
-};
+      console.error(`[Sync] Failed for target ${targetId}:`, err.
