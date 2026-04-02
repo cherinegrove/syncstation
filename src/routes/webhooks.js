@@ -161,6 +161,7 @@ async function processWebhookEvent(event) {
       console.log(`[Sync] Starting: ${sourceObjectType} ${objectId} -> ${targetObjectType} (${rule.direction})`);
 
       const result = await sync(client, {
+        portalId, // ADDED: Pass portalId for custom object token access
         sourceObjectType,
         sourceId: objectId,
         targetObjectType,
