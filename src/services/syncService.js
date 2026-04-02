@@ -387,4 +387,80 @@ async function sync(client, {
         results.push({ id: targetId, status: 'skipped' });
       }
     } catch (err) {
-      console.error(`[Sync] Failed for target ${targetId}:`, err.
+      console.error(`[Sync] Failed for target ${targetId}:`, err.message);
+      results.push({ 
+        id: targetId, 
+        status: 'error', 
+        error: err.message 
+      });
+      syncResult.errors.push({
+        stage: 'process_target',
+        targetId,
+        message: err.message
+      });
+    }
+  }
+
+  syncResult.status = updatedCount > 0 ? 'success' : 'no_updates';
+  syncResult.updated = updatedCount;
+  syncResult.targets = results;
+  
+  console.log(`[Sync] Complete: ${updatedCount}/${targets.length} updated`);
+  
+  if (syncResult.errors.length > 0) {
+    console.log(`[Sync] Encountered ${syncResult.errors.length} error(s)`);
+  }
+  if (syncResult.warnings.length > 0) {
+    console.log(`[Sync] Encountered ${syncResult.warnings.length} warning(s)`);
+  }
+  
+  return syncResult;
+}
+
+// Validation function to check if a sync rule can be created
+async function validateSyncRule(client, sourceObjectType, targetObjectType, mappings) {
+  const validation = {
+    valid: true,
+    errors: [],
+    warnings: []
+  };
+
+  // Test source object access
+  try {
+    await client.crm.objects.basicApi.getById(sourceObjectType, '1', ['hs_object_id']);
+  } catch (err) {
+    if (err.response?.status === 403) {
+      validation.valid = false;
+      const errorInfo = parseApiError(err, sourceObjectType);
+      validation.errors.push({
+        field: 'sourceObject',
+        message: errorInfo.userMessage,
+        type: errorInfo.type
+      });
+    }
+  }
+
+  // Test target object access
+  try {
+    await client.crm.objects.basicApi.getById(targetObjectType, '1', ['hs_object_id']);
+  } catch (err) {
+    if (err.response?.status === 403) {
+      validation.valid = false;
+      const errorInfo = parseApiError(err, targetObjectType);
+      validation.errors.push({
+        field: 'targetObject',
+        message: errorInfo.userMessage,
+        type: errorInfo.type
+      });
+    }
+  }
+
+  return validation;
+}
+
+module.exports = { 
+  sync, 
+  validateSyncRule,
+  ERROR_TYPES,
+  isCustomObject
+};
