@@ -275,8 +275,11 @@ async function pollObjectType(portalId, objectType) {
               direction: rule.direction,
               mappings: rule.mappings,
               skipIfHasValue: rule.skipIfHasValue === 'true',
-              associationRule: rule.assocRule || 'all',
-              associationLabel: rule.assocLabel || ''
+associationRule: rule.assocRule || 'all',
+              associationLabel: rule.assocLabel || '',
+              ruleSourceObject: rule.sourceObject,  // ADDED
+              ruleTargetObject: rule.targetObject   // ADDED
+            });
             });
             
             if (result.status === 'success') {
