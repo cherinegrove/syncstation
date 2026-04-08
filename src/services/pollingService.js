@@ -1,6 +1,7 @@
-// src/services/pollingService.js - OPTIMIZED VERSION
+// src/services/pollingService.js - OPTIMIZED VERSION WITH TIER ENFORCEMENT
 const { getClient } = require('./hubspotClient');
 const { sync } = require('./syncService');
+const { getPortalTier, isObjectAllowed } = require('./tierService');  // ✅ ADDED
 const { Pool } = require('pg');
 
 let pool = null;
@@ -217,6 +218,20 @@ async function pollObjectType(portalId, objectType) {
   console.log(`[Polling] Starting poll for ${objectType} in portal ${portalId}`);
   
   try {
+    // ✅ TIER ENFORCEMENT: Check if portal can sync
+    const tierInfo = await getPortalTier(portalId);
+    
+    if (!tierInfo.canSync) {
+      console.log(`[Polling] ⛔ Portal ${portalId} cannot sync - tier: ${tierInfo.tier}, expired: ${tierInfo.isExpired}`);
+      return { synced: 0, errors: 0 };
+    }
+    
+    // ✅ TIER ENFORCEMENT: Check if object type is allowed for this tier
+    if (!isObjectAllowed(tierInfo.tier, objectType)) {
+      console.log(`[Polling] ⛔ Portal ${portalId} tier ${tierInfo.tier} doesn't allow ${objectType} - skipping`);
+      return { synced: 0, errors: 0 };
+    }
+    
     const client = await getClient(portalId);
     const rules = await getSyncRulesForPolling(portalId, objectType);
     
@@ -277,8 +292,8 @@ async function pollObjectType(portalId, objectType) {
               skipIfHasValue: rule.skipIfHasValue === 'true',
               associationRule: rule.assocRule || 'all',
               associationLabel: rule.assocLabel || '',
-              ruleSourceObject: rule.sourceObject,  // ADDED
-              ruleTargetObject: rule.targetObject   // ADDED
+              ruleSourceObject: rule.sourceObject,  // For mapping reversal
+              ruleTargetObject: rule.targetObject   // For mapping reversal
             });
             
             if (result.status === 'success') {
