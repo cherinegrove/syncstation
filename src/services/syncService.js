@@ -1,4 +1,4 @@
-// src/services/syncService.js
+// src/services/syncService.js - OPTIMIZED VERSION
 
 const axios = require('axios');
 
@@ -35,6 +35,7 @@ function parseApiError(err, objectType) {
   const status = err.response?.status;
   const errorData = err.response?.data;
   const message = errorData?.message || err.message;
+  const headers = err.response?.headers || {};
   
   // 403 Forbidden - Permission/scope issues
   if (status === 403) {
@@ -72,8 +73,14 @@ function parseApiError(err, objectType) {
   if (status === 429) {
     return {
       type: ERROR_TYPES.RATE_LIMIT,
-      userMessage: `HubSpot API rate limit reached. Sync will retry automatically in a few minutes.`,
-      technicalMessage: message
+      userMessage: `HubSpot API rate limit reached. Sync will retry automatically in a few moments.`,
+      technicalMessage: message,
+      // 🆕 Include rate limit headers for retry logic
+      rateLimitInfo: {
+        intervalMs: parseInt(headers['x-hubspot-ratelimit-interval-milliseconds']) || 10000,
+        remaining: parseInt(headers['x-hubspot-ratelimit-remaining']) || 0,
+        max: parseInt(headers['x-hubspot-ratelimit-max']) || 110
+      }
     };
   }
   
@@ -94,97 +101,131 @@ function parseApiError(err, objectType) {
   };
 }
 
-// Get properties for both standard and custom objects
-async function getProperties(client, objectType, objectId, properties, portalId) {
-  try {
-    // For custom objects, use direct axios call to ensure proper endpoint
-    if (isCustomObject(objectType)) {
-      // Get access token from tokenStore, not from client
-      const tokenStore = require('./tokenStore');
-      const tokens = await tokenStore.get(portalId);
+// 🆕 HELPER: Retry with exponential backoff for rate limits
+async function retryWithBackoff(fn, maxRetries = 3) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const errorInfo = parseApiError(err);
       
-      if (!tokens?.access_token) {
-        throw new Error('No access token found for portal');
+      // Only retry on rate limit errors
+      if (errorInfo.type === ERROR_TYPES.RATE_LIMIT && attempt < maxRetries) {
+        const waitTime = errorInfo.rateLimitInfo?.intervalMs || 10000;
+        const backoffTime = waitTime + (attempt * 1000); // Add extra time per retry
+        
+        console.log(`[Sync] Rate limit hit. Waiting ${backoffTime}ms before retry ${attempt}/${maxRetries}...`);
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+        continue;
       }
       
-      const accessToken = tokens.access_token;
-      const propertyList = Array.isArray(properties) ? properties.join(',') : properties;
-      
-      const url = `https://api-eu1.hubapi.com/crm/v3/objects/${objectType}/${objectId}`;
-      const response = await axios.get(url, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-        params: { properties: propertyList }
-      });
-      
-      console.log(`[Sync] Custom object ${objectType} ${objectId} fetched via direct API`);
-      return response.data.properties || {};
+      // Don't retry other error types
+      throw err;
     }
-    
-    // Standard objects use SDK
-    const response = await client.crm.objects.basicApi.getById(
-      objectType, String(objectId), properties
-    );
-    return response.properties || {};
-    
-  } catch (err) {
-    const errorInfo = parseApiError(err, objectType);
-    console.error(`[Sync] Failed to get properties for ${objectType} ${objectId}:`, errorInfo.userMessage);
-    
-    // Throw with enhanced error info
-    const enhancedError = new Error(errorInfo.userMessage);
-    enhancedError.type = errorInfo.type;
-    enhancedError.technicalMessage = errorInfo.technicalMessage;
-    enhancedError.objectType = objectType;
-    throw enhancedError;
   }
+  
+  throw lastError;
 }
 
-// Update properties for both standard and custom objects
-async function updateProperties(client, objectType, objectId, properties, portalId) {
-  try {
-    // For custom objects, use direct axios call
-    if (isCustomObject(objectType)) {
-      // Get access token from tokenStore, not from client
-      const tokenStore = require('./tokenStore');
-      const tokens = await tokenStore.get(portalId);
-      
-      if (!tokens?.access_token) {
-        throw new Error('No access token found for portal');
+// 🆕 Get properties with retry logic
+async function getProperties(client, objectType, objectId, properties, portalId) {
+  return retryWithBackoff(async () => {
+    try {
+      // For custom objects, use direct axios call to ensure proper endpoint
+      if (isCustomObject(objectType)) {
+        // Get access token from tokenStore, not from client
+        const tokenStore = require('./tokenStore');
+        const tokens = await tokenStore.get(portalId);
+        
+        if (!tokens?.access_token) {
+          throw new Error('No access token found for portal');
+        }
+        
+        const accessToken = tokens.access_token;
+        const propertyList = Array.isArray(properties) ? properties.join(',') : properties;
+        
+        const url = `https://api-eu1.hubapi.com/crm/v3/objects/${objectType}/${objectId}`;
+        const response = await axios.get(url, {
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          params: { properties: propertyList }
+        });
+        
+        console.log(`[Sync] Custom object ${objectType} ${objectId} fetched via direct API`);
+        return response.data.properties || {};
       }
       
-      const accessToken = tokens.access_token;
+      // Standard objects use SDK
+      const response = await client.crm.objects.basicApi.getById(
+        objectType, String(objectId), properties
+      );
+      return response.properties || {};
       
-      const url = `https://api-eu1.hubapi.com/crm/v3/objects/${objectType}/${objectId}`;
-      await axios.patch(url, {
-        properties
-      }, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
+    } catch (err) {
+      const errorInfo = parseApiError(err, objectType);
+      console.error(`[Sync] Failed to get properties for ${objectType} ${objectId}:`, errorInfo.userMessage);
       
-      console.log(`[Sync] Custom object ${objectType} ${objectId} updated via direct API`);
-      return { success: true };
+      // Throw with enhanced error info
+      const enhancedError = new Error(errorInfo.userMessage);
+      enhancedError.type = errorInfo.type;
+      enhancedError.technicalMessage = errorInfo.technicalMessage;
+      enhancedError.objectType = objectType;
+      enhancedError.response = err.response; // Keep original for retry logic
+      throw enhancedError;
     }
-    
-    // Standard objects use SDK
-    await client.crm.objects.basicApi.update(
-      objectType, String(objectId), { properties }
-    );
-    return { success: true };
-    
-  } catch (err) {
-    const errorInfo = parseApiError(err, objectType);
-    console.error(`[Sync] Failed to update ${objectType} ${objectId}:`, errorInfo.userMessage);
-    
-    return { 
-      success: false, 
-      error: errorInfo.userMessage,
-      errorType: errorInfo.type,
-      technicalMessage: errorInfo.technicalMessage
-    };
-  }
+  });
+}
+
+// 🆕 Update properties with retry logic
+async function updateProperties(client, objectType, objectId, properties, portalId) {
+  return retryWithBackoff(async () => {
+    try {
+      // For custom objects, use direct axios call
+      if (isCustomObject(objectType)) {
+        // Get access token from tokenStore, not from client
+        const tokenStore = require('./tokenStore');
+        const tokens = await tokenStore.get(portalId);
+        
+        if (!tokens?.access_token) {
+          throw new Error('No access token found for portal');
+        }
+        
+        const accessToken = tokens.access_token;
+        
+        const url = `https://api-eu1.hubapi.com/crm/v3/objects/${objectType}/${objectId}`;
+        await axios.patch(url, {
+          properties
+        }, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log(`[Sync] Custom object ${objectType} ${objectId} updated via direct API`);
+        return { success: true };
+      }
+      
+      // Standard objects use SDK
+      await client.crm.objects.basicApi.update(
+        objectType, String(objectId), { properties }
+      );
+      return { success: true };
+      
+    } catch (err) {
+      const errorInfo = parseApiError(err, objectType);
+      console.error(`[Sync] Failed to update ${objectType} ${objectId}:`, errorInfo.userMessage);
+      
+      return { 
+        success: false, 
+        error: errorInfo.userMessage,
+        errorType: errorInfo.type,
+        technicalMessage: errorInfo.technicalMessage
+      };
+    }
+  });
 }
 
 // Get associations between objects (works for both standard and custom)
