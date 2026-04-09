@@ -17,6 +17,7 @@ app.use('/webhooks',      require('./routes/webhooks'));
 app.use('/admin',         require('./routes/admin'));
 app.use('/account',       require('./routes/account'));
 app.use('/notifications', require('./routes/notifications'));
+app.use('/paystack',      require('./routes/paystack'));
 
 // Root landing page
 app.get('/', (req, res) => {
