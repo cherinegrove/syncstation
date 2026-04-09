@@ -40,6 +40,7 @@
   tr:hover td { background: var(--surface2); }
 
   .tier-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-family: 'DM Mono', monospace; }
+  .tier-free      { background: rgba(96,165,250,0.1); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }
   .tier-trial     { background: rgba(251,191,36,0.15); color: var(--warning); border: 1px solid rgba(251,191,36,0.3); }
   .tier-starter   { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
   .tier-growth    { background: rgba(96,165,250,0.1); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }
@@ -357,6 +358,7 @@
         <td>${statusHtml}</td>
         <td>
           <select id="tier-${p.portal_id}" style="width:155px">
+            <option value="free"      ${p.tier==='free'?'selected':''}>Free</option>
             <option value="trial"     ${p.tier==='trial'?'selected':''}>Trial</option>
             <option value="starter"   ${p.tier==='starter'?'selected':''}>Starter ($7)</option>
             <option value="growth"    ${p.tier==='growth'?'selected':''}>Growth ($12)</option>
