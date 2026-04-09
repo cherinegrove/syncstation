@@ -311,7 +311,7 @@
 
     portals.forEach(p => {
       if (p.tier === 'trial') {
-        const c = getTrialCountdown(p.trial_started_at, p.tier);
+        const c = getTrialCountdown(p.created_at, p.tier);
         if (c?.isExpired) expired++; else trial++;
       } else if (!['cancelled','suspended'].includes(p.tier)) {
         paid++; mrr += TIER_PRICES[p.tier] || 0;
@@ -332,7 +332,7 @@
     }
 
     tbody.innerHTML = portals.map(p => {
-      const c         = getTrialCountdown(p.trial_started_at, p.tier);
+      const c         = getTrialCountdown(p.created_at, p.tier);
       const isExpired = c?.isExpired;
       const tierClass = isExpired ? 'expired' : p.tier;
       const tierLabel = isExpired ? 'Trial Expired' : p.tier.charAt(0).toUpperCase() + p.tier.slice(1);
@@ -352,7 +352,7 @@
           <a href="/settings?portalId=${p.portal_id}" target="_blank" style="color:var(--accent);font-size:11px;text-decoration:none">Settings ↗</a>
         </td>
         <td><span class="tier-badge tier-${tierClass}">${tierLabel}</span></td>
-        <td><span class="mono">${formatDate(p.trial_started_at)}</span></td>
+        <td><span class="mono">${formatDate(p.created_at)}</span></td>
         <td><span class="mono">${expiry}</span></td>
         <td>${statusHtml}</td>
         <td>
