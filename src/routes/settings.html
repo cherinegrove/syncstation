@@ -877,6 +877,10 @@
   async function loadErrors() {
     try {
       const res = await fetch('/settings/errors?portalId=' + portalId);
+      if (!res.ok) {
+        console.log('Error endpoint returned:', res.status);
+        return;
+      }
       const data = await res.json();
       syncErrors = data.errors || [];
       
@@ -1310,13 +1314,13 @@
   // Load available objects (including correct Projects object type ID)
   loadAvailableObjects();
   
-  // Load error count
-  loadErrors();
+  // Load error count (with error handling to prevent crashes)
+  loadErrors().catch(err => console.log('Error loading errors:', err));
   
   // Auto-refresh errors every 30 seconds if error log is visible
   setInterval(() => {
     if (document.getElementById('errorLog').style.display !== 'none') {
-      loadErrors();
+      loadErrors().catch(err => console.log('Error loading errors:', err));
     } else {
       // Just update the count
       fetch('/settings/errors?portalId=' + portalId)
