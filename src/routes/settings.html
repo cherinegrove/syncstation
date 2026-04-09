@@ -5,114 +5,669 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PropBridge — Sync Rules</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- FIELD TYPE VALIDATION -->
+<link rel="stylesheet" href="/css/fieldTypeValidation.css">
+<script src="/js/fieldTypeValidation.js"></script>
 <style>
   :root {
-    --bg: #0f0f11; --surface: #18181c; --surface2: #222228;
-    --border: #2e2e38; --accent: #ff6b35; --accent2: #ffb347;
-    --text: #f0f0f4; --muted: #8888a0;
-    --success: #4ade80; --error: #f87171; --radius: 10px;
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --accent: #ff6b35;
+    --accent2: #ffb347;
+    --text: #f0f0f4;
+    --muted: #8888a0;
+    --success: #4ade80;
+    --error: #f87171;
+    --radius: 10px;
   }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 40px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; isolation: isolate; }
-  .logo { display: flex; align-items: center; gap: 12px; font-family: 'DM Mono', monospace; font-weight: 500; font-size: 18px; flex: 1; }
-  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-  .header-nav { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px; border: 1px solid var(--border); position: absolute; left: 50%; transform: translateX(-50%); }
-  .header-nav a { text-decoration: none; font-size: 14px; font-weight: 500; padding: 7px 20px; border-radius: 6px; transition: all 0.15s; color: var(--muted); }
-  .header-nav a.active { background: var(--bg); color: var(--text); }
-  .header-nav a:hover { color: var(--text); }
-  .portal-badge { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); background: var(--surface2); padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); flex: 1; text-align: right; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
 
-  .notif-banner { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .notif-info    { border-left: 3px solid #60a5fa; }
-  .notif-warning { border-left: 3px solid #fbbf24; }
-  .notif-error   { border-left: 3px solid var(--error); }
-  .notif-success { border-left: 3px solid var(--success); }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    isolation: isolate;
+  }
 
-  .main { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
-  .page-title { font-size: 28px; font-weight: 600; margin-bottom: 6px; }
-  .page-subtitle { color: var(--muted); font-size: 15px; margin-bottom: 36px; }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    flex: 1;
+  }
 
-  .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
-  .stat-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--accent); line-height: 1; margin-bottom: 4px; }
-  .stat-label { font-size: 12px; color: var(--muted); }
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
 
-  .rules-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
-  .rule-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color 0.2s; }
+  .header-nav {
+    display: flex;
+    gap: 4px;
+    background: var(--surface2);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .header-nav a {
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 7px 20px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    color: var(--muted);
+  }
+
+  .header-nav a.active {
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .header-nav a:hover {
+    color: var(--text);
+  }
+
+  .portal-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    flex: 1;
+    text-align: right;
+  }
+
+  .main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+
+  .page-subtitle {
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 32px;
+  }
+
+  .rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .rule-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
   .rule-card:hover { border-color: #44445a; }
   .rule-card.active { border-left: 3px solid var(--accent); }
-  .rule-header { display: flex; align-items: center; padding: 16px 20px; gap: 14px; }
-  .rule-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+
+  .rule-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    gap: 14px;
+  }
+
+  .rule-toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
   .rule-toggle input { opacity: 0; width: 0; height: 0; }
-  .toggle-slider { position: absolute; inset: 0; background: var(--surface2); border-radius: 22px; border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
-  .toggle-slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: var(--muted); border-radius: 50%; transition: 0.2s; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--surface2);
+    border-radius: 22px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+
   input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
   input:checked + .toggle-slider:before { transform: translateX(18px); background: white; }
+
   .rule-info { flex: 1; }
-  .rule-name { font-weight: 500; font-size: 15px; margin-bottom: 3px; }
-  .rule-meta { font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; display: flex; gap: 12px; flex-wrap: wrap; }
-  .rule-meta span { background: var(--surface2); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
+
+  .rule-name {
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+
+  .rule-meta {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .rule-meta span {
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
   .rule-actions { display: flex; gap: 8px; }
-  .btn-icon { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.15s; }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.15s;
+  }
+
   .btn-icon:hover { background: var(--surface2); color: var(--text); }
   .btn-icon.delete:hover { background: #3d1414; color: var(--error); border-color: var(--error); }
-  .rule-mappings { padding: 0 20px 16px 74px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .mapping-pill { font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+  .rule-mappings {
+    padding: 0 20px 16px 74px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mapping-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   .mapping-pill .arrow { color: var(--accent); }
 
-  .btn-add { width: 100%; padding: 14px; background: transparent; border: 2px dashed var(--border); border-radius: var(--radius); color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-  .btn-add:hover { border-color: var(--accent); color: var(--accent); background: rgba(255,107,53,0.04); }
+  .btn-add {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
 
-  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .btn-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255,107,53,0.04);
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
   .modal-overlay.open { display: flex; }
-  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 32px; }
-  .modal-title { font-size: 20px; font-weight: 600; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-  .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 32px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   .form-group.full { grid-column: 1 / -1; }
-  label { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-  select, input[type="text"] { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 9px 12px; width: 100%; transition: border-color 0.15s; appearance: none; -webkit-appearance: none; }
-  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-  select:focus, input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  select, input[type="text"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 9px 12px;
+    width: 100%;
+    transition: border-color 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+
+  select:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
   select option { background: var(--surface2); }
 
   .mappings-section { margin-bottom: 24px; }
-  .mappings-title { font-size: 13px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
-  .mappings-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-  .mapping-row { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 8px; align-items: center; }
-  .mapping-arrow { color: var(--accent); font-size: 18px; text-align: center; }
-  .btn-remove-mapping { width: 28px; height: 28px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+
+  .mappings-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mappings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .mapping-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .mapping-arrow {
+    color: var(--accent);
+    font-size: 18px;
+    text-align: center;
+    font-weight: 300;
+  }
+
+  .btn-remove-mapping {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
   .btn-remove-mapping:hover { background: #3d1414; color: var(--error); border-color: var(--error); }
-  .btn-add-mapping { background: transparent; border: 1px dashed var(--border); border-radius: 6px; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 8px; cursor: pointer; width: 100%; transition: all 0.15s; }
+
+  .btn-add-mapping {
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.15s;
+  }
+
   .btn-add-mapping:hover { border-color: var(--accent); color: var(--accent); }
 
-  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border); margin-top: 4px; }
-  .btn { padding: 10px 20px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: none; }
-  .btn-secondary { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+  .modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
   .btn-secondary:hover { color: var(--text); }
-  .btn-primary { background: var(--accent); color: white; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+
   .btn-primary:hover { background: #ff8555; }
 
-  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
   .empty-icon { font-size: 48px; margin-bottom: 16px; }
   .empty-title { font-size: 18px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
   .empty-desc { font-size: 14px; line-height: 1.6; }
 
-  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; font-size: 14px; display: flex; align-items: center; gap: 8px; transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 300; }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 300;
+  }
+
   .toast.show { transform: translateY(0); opacity: 1; }
   .toast.success { border-left: 3px solid var(--success); }
   .toast.error { border-left: 3px solid var(--error); }
 
-  .loading-dots::after { content: ''; animation: dots 1.5s infinite; }
-  @keyframes dots { 0%,20% { content: '.'; } 40% { content: '..'; } 60%,100% { content: '...'; } }
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .stat-card:hover {
+    border-color: #44445a;
+  }
+
+  .stat-card.clickable:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .stat-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 28px;
+    font-weight: 500;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-value.errors {
+    color: var(--error);
+  }
+
+  .stat-label { font-size: 12px; color: var(--muted); }
+  .loading { color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; }
+
+  .notif-banner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .notif-info    { border-left: 3px solid #60a5fa; }
+  .notif-warning { border-left: 3px solid #fbbf24; }
+  .notif-error   { border-left: 3px solid var(--error); }
+  .notif-success { border-left: 3px solid var(--success); }
+  
+  /* Validation feedback styling within mapping rows */
+  .mapping-validation {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+
+  /* ERROR LOG STYLES */
+  .error-log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+
+  .error-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .error-log-title {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .error-log-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-small:hover {
+    color: var(--text);
+    border-color: #44445a;
+  }
+
+  .error-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .error-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--error);
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .error-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .error-message {
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .error-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .error-meta span {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .error-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="logo"><div class="logo-icon">⇄</div>PropBridge</div>
+  <div class="logo">
+    <div class="logo-icon">⇄</div>
+    PropBridge
+  </div>
   <nav class="header-nav">
     <a id="navSettings" href="#" class="active">Sync Rules</a>
     <a id="navAccount" href="#">Account</a>
@@ -127,31 +682,71 @@
   <div class="page-subtitle">Automatically sync property values between associated CRM objects.</div>
 
   <div class="stats-bar">
-    <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total rules</div></div>
-    <div class="stat-card"><div class="stat-value" id="statActive">0</div><div class="stat-label">Active rules</div></div>
-    <div class="stat-card"><div class="stat-value" id="statMappings">0</div><div class="stat-label">Property mappings</div></div>
+    <div class="stat-card">
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-label">Total rules</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statActive">0</div>
+      <div class="stat-label">Active rules</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statMappings">0</div>
+      <div class="stat-label">Property mappings</div>
+    </div>
+    <div class="stat-card clickable" onclick="toggleErrorLog()">
+      <div class="stat-value errors" id="statErrors">0</div>
+      <div class="stat-label">Sync errors</div>
+    </div>
+  </div>
+
+  <!-- ERROR LOG -->
+  <div class="error-log" id="errorLog" style="display:none">
+    <div class="error-log-header">
+      <div class="error-log-title">
+        <span>⚠️</span>
+        <span>Sync Error Log</span>
+      </div>
+      <div class="error-log-actions">
+        <button class="btn-small" onclick="loadErrors()">🔄 Refresh</button>
+        <button class="btn-small" onclick="clearErrors()">🗑 Clear All</button>
+        <button class="btn-small" onclick="toggleErrorLog()">✕ Close</button>
+      </div>
+    </div>
+    <div class="error-list" id="errorList">
+      <div class="error-empty">
+        <div style="font-size:32px;margin-bottom:8px">✅</div>
+        <div>No sync errors</div>
+      </div>
+    </div>
   </div>
 
   <div class="rules-list" id="rulesList"></div>
-  <button class="btn-add" onclick="openModal()"><span style="font-size:18px">+</span> Add sync rule</button>
+
+  <button class="btn-add" onclick="openModal()">
+    <span style="font-size:18px">+</span> Add sync rule
+  </button>
 </div>
 
 <!-- Modal -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
-    <div class="modal-title"><span>⇄</span><span id="modalTitle">New Sync Rule</span></div>
+    <div class="modal-title">
+      <span>⇄</span>
+      <span id="modalTitle">New Sync Rule</span>
+    </div>
 
     <div class="form-grid">
       <div class="form-group">
         <label>Source Object</label>
         <select id="sourceObject" onchange="loadProperties()">
-          <option value="">Loading objects<span class="loading-dots"></span></option>
+          <option value="">Loading objects...</option>
         </select>
       </div>
       <div class="form-group">
         <label>Target Object</label>
         <select id="targetObject" onchange="loadProperties()">
-          <option value="">Loading objects<span class="loading-dots"></span></option>
+          <option value="">Loading objects...</option>
         </select>
       </div>
       <div class="form-group">
@@ -190,7 +785,7 @@
     <div class="mappings-section">
       <div class="mappings-title">
         Property Mappings
-        <span style="color:var(--muted);font-size:12px;font-family:monospace" id="propsStatus"></span>
+        <span class="loading" id="propsStatus"></span>
       </div>
       <div class="mappings-list" id="mappingsList"></div>
       <button class="btn-add-mapping" onclick="addMappingRow()">+ Add property mapping</button>
@@ -206,53 +801,150 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  let rules       = JSON.parse(localStorage.getItem('propbridge_rules') || '[]');
-  let editingId   = null;
-  let sourceProps = [];
-  let targetProps = [];
-  let allObjects  = [];
-
   const urlParams = new URLSearchParams(window.location.search);
   const portalId  = urlParams.get('portalId') || 'Demo';
+  
+  // CRITICAL: Use portal-specific localStorage key to prevent cross-portal contamination
+  const storageKey = `propbridge_rules_${portalId}`;
+  let rules = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  let editingId = null;
+  let sourceProps = [];
+  let targetProps = [];
+  let availableObjects = [];
+  let syncErrors = [];
 
-  document.getElementById('portalBadge').textContent = 'Portal ' + portalId;
+  document.getElementById('portalBadge').textContent  = 'Portal ' + portalId;
   document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
   document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
 
-  // Load available objects dynamically
-  async function loadObjects() {
+  // Load available objects from HubSpot
+  async function loadAvailableObjects() {
     try {
-      const res  = await fetch('/settings/objects?portalId=' + portalId);
-      const data = await res.json();
-      allObjects = data.objects || [];
-
-      const opts = '<option value="">Select object...</option>' +
-        allObjects.map(o => `<option value="${o.name}">${o.label}${o.custom ? ' (Custom)' : ''}</option>`).join('');
-
-      document.getElementById('sourceObject').innerHTML = opts;
-      document.getElementById('targetObject').innerHTML = opts;
-
-      console.log(`[Settings] Loaded ${allObjects.length} object types (source: ${data.source})`);
+      const response = await fetch('/settings/objects?portalId=' + portalId);
+      const data = await response.json();
+      
+      // Standard objects that always work
+      const standardObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts', standard: true },
+        { objectTypeId: 'companies', label: 'Companies', standard: true },
+        { objectTypeId: 'deals', label: 'Deals', standard: true },
+        { objectTypeId: 'tickets', label: 'Tickets', standard: true },
+        { objectTypeId: 'leads', label: 'Leads', standard: true }
+      ];
+      
+      // Add custom objects from API (like Projects)
+      const customObjects = (data.objects || [])
+        .filter(obj => !standardObjects.find(s => s.label === obj.label))
+        .map(obj => ({
+          objectTypeId: obj.objectTypeId || obj.name,
+          label: obj.label || obj.name,
+          custom: true
+        }));
+      
+      availableObjects = [...standardObjects, ...customObjects];
+      
+      // Populate dropdowns
+      populateObjectDropdowns();
+      
     } catch (err) {
-      console.error('Failed to load objects:', err);
-      // Fallback
-      const fallback = '<option value="">Select object...</option>' +
-        ['contacts','companies','deals','tickets','leads','products','line_items','quotes']
-          .map(o => `<option value="${o}">${o.charAt(0).toUpperCase() + o.slice(1).replace('_',' ')}</option>`)
-          .join('');
-      document.getElementById('sourceObject').innerHTML = fallback;
-      document.getElementById('targetObject').innerHTML = fallback;
+      console.error('[Settings] Failed to load objects:', err);
+      // Fallback to standard objects only
+      availableObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts' },
+        { objectTypeId: 'companies', label: 'Companies' },
+        { objectTypeId: 'deals', label: 'Deals' },
+        { objectTypeId: 'tickets', label: 'Tickets' },
+        { objectTypeId: 'leads', label: 'Leads' }
+      ];
+      populateObjectDropdowns();
+    }
+  }
+
+  function populateObjectDropdowns() {
+    const sourceSelect = document.getElementById('sourceObject');
+    const targetSelect = document.getElementById('targetObject');
+    
+    const options = '<option value="">Select object...</option>' + 
+      availableObjects.map(obj => 
+        `<option value="${obj.objectTypeId}">${obj.label}${obj.custom ? ' (Custom)' : ''}</option>`
+      ).join('');
+    
+    sourceSelect.innerHTML = options;
+    targetSelect.innerHTML = options;
+  }
+
+  // Load sync errors
+  async function loadErrors() {
+    try {
+      const res = await fetch('/settings/errors?portalId=' + portalId);
+      const data = await res.json();
+      syncErrors = data.errors || [];
+      
+      document.getElementById('statErrors').textContent = syncErrors.length;
+      
+      const list = document.getElementById('errorList');
+      if (syncErrors.length === 0) {
+        list.innerHTML = `
+          <div class="error-empty">
+            <div style="font-size:32px;margin-bottom:8px">✅</div>
+            <div>No sync errors</div>
+          </div>
+        `;
+        return;
+      }
+      
+      list.innerHTML = syncErrors.map(err => {
+        const time = new Date(err.created_at).toLocaleString();
+        return `
+          <div class="error-item">
+            <div class="error-time">${time}</div>
+            <div class="error-message">${err.error_message || 'Unknown error'}</div>
+            <div class="error-meta">
+              ${err.rule_name ? `<span>Rule: ${err.rule_name}</span>` : ''}
+              ${err.source_object ? `<span>${err.source_object}${err.source_id ? ' ' + err.source_id : ''}</span>` : ''}
+              ${err.target_object ? `<span>→ ${err.target_object}</span>` : ''}
+              ${err.error_type ? `<span>${err.error_type}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      console.error('[Error Log] Failed to load:', err);
+    }
+  }
+
+  async function clearErrors() {
+    if (!confirm('Clear all sync errors?')) return;
+    
+    try {
+      await fetch('/settings/errors?portalId=' + portalId, { method: 'DELETE' });
+      syncErrors = [];
+      document.getElementById('statErrors').textContent = '0';
+      loadErrors();
+      showToast('✓ Error log cleared', 'success');
+    } catch (err) {
+      showToast('Failed to clear errors', 'error');
+    }
+  }
+
+  function toggleErrorLog() {
+    const log = document.getElementById('errorLog');
+    const isVisible = log.style.display !== 'none';
+    log.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) {
+      loadErrors();
     }
   }
 
   // Load notifications
   async function loadNotifications() {
     try {
-      const res   = await fetch('/notifications?portalId=' + portalId);
-      const data  = await res.json();
+      const res  = await fetch('/notifications?portalId=' + portalId);
+      const data = await res.json();
       const banners = document.getElementById('notificationBanners');
       const notifications = data.notifications || [];
       if (!notifications.length) { banners.innerHTML = ''; return; }
+      const colors = { info: '#60a5fa', warning: '#fbbf24', error: '#f87171', success: '#4ade80' };
       banners.innerHTML = notifications.map(n => `
         <div class="notif-banner notif-${n.type}">
           <div>
@@ -280,11 +972,12 @@
     const total    = rules.length;
     const active   = rules.filter(r => r.enabled).length;
     const mappings = rules.reduce((sum, r) => sum + (r.mappings?.length || 0), 0);
+
     document.getElementById('statTotal').textContent    = total;
     document.getElementById('statActive').textContent   = active;
     document.getElementById('statMappings').textContent = mappings;
 
-    if (!total) {
+    if (total === 0) {
       list.innerHTML = `<div class="empty-state">
         <div class="empty-icon">⇄</div>
         <div class="empty-title">No sync rules yet</div>
@@ -303,7 +996,7 @@
           <div class="rule-info">
             <div class="rule-name">${rule.name || 'Unnamed rule'}</div>
             <div class="rule-meta">
-              <span>${getObjectLabel(rule.sourceObject)} → ${getObjectLabel(rule.targetObject)}</span>
+              <span>${rule.sourceObject} → ${rule.targetObject}</span>
               <span>${rule.direction === 'two_way' ? '⇄ Bidirectional' : '→ One-way'}</span>
               <span>${rule.assocRule}</span>
               <span>${rule.mappings?.length || 0} mappings</span>
@@ -328,16 +1021,15 @@
     `).join('');
   }
 
-  function getObjectLabel(name) {
-    const obj = allObjects.find(o => o.name === name);
-    return obj ? obj.label : (name || '');
-  }
-
   function toggleRule(id, enabled) {
     rules = rules.map(r => r.id === id ? { ...r, enabled } : r);
     saveRules();
     render();
-    fetch('/settings/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portalId, rules }) }).catch(() => {});
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    }).catch(() => {});
     showToast(enabled ? '✓ Rule enabled' : 'Rule disabled', enabled ? 'success' : '');
   }
 
@@ -346,7 +1038,11 @@
     rules = rules.filter(r => r.id !== id);
     saveRules();
     render();
-    fetch('/settings/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portalId, rules }) }).catch(() => {});
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    }).catch(() => {});
     showToast('Rule deleted', '');
   }
 
@@ -354,14 +1050,14 @@
     const rule = rules.find(r => r.id === id);
     if (!rule) return;
     editingId = id;
-    document.getElementById('modalTitle').textContent   = 'Edit Sync Rule';
-    document.getElementById('sourceObject').value       = rule.sourceObject;
-    document.getElementById('targetObject').value       = rule.targetObject;
-    document.getElementById('assocRule').value          = rule.assocRule;
-    document.getElementById('assocLabel').value         = rule.assocLabel || '';
-    document.getElementById('syncDirection').value      = rule.direction;
-    document.getElementById('skipIfHasValue').value     = rule.skipIfHasValue || 'false';
-    document.getElementById('ruleName').value           = rule.name || '';
+    document.getElementById('modalTitle').textContent      = 'Edit Sync Rule';
+    document.getElementById('sourceObject').value          = rule.sourceObject;
+    document.getElementById('targetObject').value          = rule.targetObject;
+    document.getElementById('assocRule').value             = rule.assocRule;
+    document.getElementById('assocLabel').value            = rule.assocLabel || '';
+    document.getElementById('syncDirection').value         = rule.direction;
+    document.getElementById('skipIfHasValue').value        = rule.skipIfHasValue || 'false';
+    document.getElementById('ruleName').value              = rule.name || '';
     toggleLabelField();
     loadProperties().then(() => {
       document.getElementById('mappingsList').innerHTML = '';
@@ -407,22 +1103,39 @@
       ]);
       sourceProps = srcRes.properties || [];
       targetProps = tgtRes.properties || [];
-      document.getElementById('propsStatus').textContent = sourceProps.length + ' source / ' + targetProps.length + ' target props';
+      document.getElementById('propsStatus').textContent = sourceProps.length + ' source / ' + targetProps.length + ' target props loaded';
       refreshMappingSelects();
     } catch (e) {
       document.getElementById('propsStatus').textContent = 'Could not load properties';
     }
   }
 
-  function buildPropOptions(props, selectedVal) {
+  function buildPropOptions(props, selectedVal, filterByType) {
     if (!props.length) return '<option value="">Select object first...</option>';
+    
+    let filtered = props;
+    
+    // Filter properties by compatible types if specified
+    if (filterByType && window.filterCompatibleProperties) {
+      filtered = window.filterCompatibleProperties(props, filterByType);
+    }
+    
     return '<option value="">Select property...</option>' +
-      props.map(p => `<option value="${p.name}" ${p.name === selectedVal ? 'selected' : ''}>${p.label} (${p.name})</option>`).join('');
+      filtered.map(p => {
+        const typeName = window.getTypeName ? window.getTypeName(p.type) : p.type;
+        return `<option value="${p.name}" data-type="${p.type}" ${p.name === selectedVal ? 'selected' : ''}>${p.label} (${typeName})</option>`;
+      }).join('');
   }
 
   function refreshMappingSelects() {
-    document.querySelectorAll('.src-select').forEach(sel => { const cur = sel.value; sel.innerHTML = buildPropOptions(sourceProps, cur); });
-    document.querySelectorAll('.tgt-select').forEach(sel => { const cur = sel.value; sel.innerHTML = buildPropOptions(targetProps, cur); });
+    document.querySelectorAll('.src-select').forEach(sel => {
+      const cur = sel.value;
+      sel.innerHTML = buildPropOptions(sourceProps, cur);
+    });
+    document.querySelectorAll('.tgt-select').forEach(sel => {
+      const cur = sel.value;
+      sel.innerHTML = buildPropOptions(targetProps, cur);
+    });
   }
 
   function addMappingRow(srcVal, tgtVal) {
@@ -436,6 +1149,39 @@
       <button class="btn-remove-mapping" onclick="this.parentElement.remove()">×</button>
     `;
     list.appendChild(div);
+    
+    // Add validation
+    const srcSelect = div.querySelector('.src-select');
+    const tgtSelect = div.querySelector('.tgt-select');
+    
+    // When source changes, filter target options
+    srcSelect.addEventListener('change', function() {
+      const selectedProp = sourceProps.find(p => p.name === this.value);
+      if (selectedProp && window.filterCompatibleProperties) {
+        const currentTarget = tgtSelect.value;
+        tgtSelect.innerHTML = buildPropOptions(targetProps, currentTarget, selectedProp.type);
+      }
+    });
+    
+    // When target changes, validate the mapping
+    tgtSelect.addEventListener('change', function() {
+      const srcProp = sourceProps.find(p => p.name === srcSelect.value);
+      const tgtProp = targetProps.find(p => p.name === this.value);
+      
+      if (srcProp && tgtProp && window.validateMappingUI) {
+        // Create feedback element if it doesn't exist
+        let feedback = div.querySelector('.mapping-validation');
+        if (!feedback) {
+          feedback = document.createElement('div');
+          feedback.className = 'mapping-validation';
+          div.appendChild(feedback);
+        }
+        
+        const isValid = window.validateMappingUI(srcProp, tgtProp, feedback);
+        div.classList.toggle('invalid', !isValid);
+        div.classList.toggle('valid', isValid);
+      }
+    });
   }
 
   function saveRule() {
@@ -447,43 +1193,92 @@
     const direction      = document.getElementById('syncDirection').value;
     const skipIfHasValue = document.getElementById('skipIfHasValue').value;
 
-    if (!sourceObject || !targetObject) { showToast('Please select source and target objects', 'error'); return; }
+    if (!sourceObject || !targetObject) {
+      showToast('Please select source and target objects', 'error');
+      return;
+    }
 
     const rows = document.querySelectorAll('.mapping-row');
     const mappings = [];
+    let hasInvalidMappings = false;
+
     rows.forEach(row => {
       const src = row.querySelector('.src-select').value;
       const tgt = row.querySelector('.tgt-select').value;
+      
       if (src && tgt) {
-        mappings.push({
-          source: src, target: tgt,
-          sourceLabel: sourceProps.find(p => p.name === src)?.label || src,
-          targetLabel: targetProps.find(p => p.name === tgt)?.label || tgt
-        });
+        // Validate mapping types
+        const srcProp = sourceProps.find(p => p.name === src);
+        const tgtProp = targetProps.find(p => p.name === tgt);
+        
+        if (srcProp && tgtProp && window.areTypesCompatible) {
+          if (!window.areTypesCompatible(srcProp.type, tgtProp.type)) {
+            hasInvalidMappings = true;
+            row.classList.add('invalid');
+            return;
+          }
+        }
+        
+        const srcLabel = srcProp?.label || src;
+        const tgtLabel = tgtProp?.label || tgt;
+        mappings.push({ source: src, target: tgt, sourceLabel: srcLabel, targetLabel: tgtLabel });
       }
     });
 
-    if (!mappings.length) { showToast('Add at least one property mapping', 'error'); return; }
+    // Check for invalid mappings
+    if (hasInvalidMappings) {
+      showToast('❌ Some mappings have incompatible field types', 'error');
+      return;
+    }
+
+    if (mappings.length === 0) {
+      showToast('Add at least one property mapping', 'error');
+      return;
+    }
 
     const rule = {
-      id:        editingId || Date.now().toString(),
-      name:      name || getObjectLabel(sourceObject) + ' → ' + getObjectLabel(targetObject),
+      id:           editingId || Date.now().toString(),
+      name:         name || sourceObject + ' → ' + targetObject,
       sourceObject, targetObject, assocRule, assocLabel,
-      direction, skipIfHasValue, mappings,
-      enabled:   editingId ? rules.find(r => r.id === editingId)?.enabled ?? true : true,
-      createdAt: editingId ? rules.find(r => r.id === editingId)?.createdAt : new Date().toISOString()
+      direction,    skipIfHasValue, mappings,
+      enabled:      editingId ? rules.find(r => r.id === editingId)?.enabled ?? true : true,
+      createdAt:    editingId ? rules.find(r => r.id === editingId)?.createdAt : new Date().toISOString()
     };
 
-    rules = editingId ? rules.map(r => r.id === editingId ? rule : r) : [...rules, rule];
+    if (editingId) {
+      rules = rules.map(r => r.id === editingId ? rule : r);
+    } else {
+      rules.push(rule);
+    }
+
     saveRules();
     render();
     closeModal();
-    fetch('/settings/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portalId, rules }) }).catch(() => {});
-    showToast(editingId ? '✓ Rule updated' : '✓ Rule saved', 'success');
+
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.validationErrors) {
+        // Server found validation errors
+        showToast('❌ ' + data.validationErrors[0].error, 'error');
+      } else if (data.validationWarnings) {
+        // Server found warnings but saved
+        showToast('⚠️ Saved with warnings: ' + data.validationWarnings[0].warning, '');
+      } else {
+        showToast(editingId ? '✓ Rule updated' : '✓ Rule saved', 'success');
+      }
+    })
+    .catch(() => {
+      showToast(editingId ? '✓ Rule updated' : '✓ Rule saved', 'success');
+    });
   }
 
   function saveRules() {
-    localStorage.setItem('propbridge_rules', JSON.stringify(rules));
+    localStorage.setItem(storageKey, JSON.stringify(rules));
   }
 
   function showToast(msg, type) {
@@ -498,17 +1293,41 @@
     if (e.target === this) closeModal();
   });
 
-  // Init
+  // Load rules from server
   fetch('/settings/rules?portalId=' + portalId)
     .then(r => r.json())
     .then(data => {
-      if (data.rules?.length) { rules = data.rules; saveRules(); }
+      if (data.rules?.length) {
+        rules = data.rules;
+        saveRules();
+      }
       render();
     })
     .catch(() => render());
 
-  loadObjects();
+  // Load notifications
   loadNotifications();
+  
+  // Load available objects (including correct Projects object type ID)
+  loadAvailableObjects();
+  
+  // Load error count
+  loadErrors();
+  
+  // Auto-refresh errors every 30 seconds if error log is visible
+  setInterval(() => {
+    if (document.getElementById('errorLog').style.display !== 'none') {
+      loadErrors();
+    } else {
+      // Just update the count
+      fetch('/settings/errors?portalId=' + portalId)
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('statErrors').textContent = (data.errors || []).length;
+        })
+        .catch(() => {});
+    }
+  }, 30000);
 </script>
 </body>
 </html>
