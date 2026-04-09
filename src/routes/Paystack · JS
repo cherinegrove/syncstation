@@ -104,7 +104,7 @@ async function handleSubscriptionDisabled(data) {
   
   // Find portal by customer ID
   const result = await pool.query(
-    'SELECT portal_id FROM portal_tiers WHERE stripe_customer_id = $1',
+    'SELECT portal_id FROM portal_tiers WHERE paystack_customer_id = $1',
     [customerId]
   );
   
@@ -131,9 +131,9 @@ async function handleSubscriptionNotRenew(data) {
   // Update subscription status to 'not_renewing'
   await pool.query(
     `UPDATE portal_tiers 
-     SET stripe_subscription_status = 'not_renewing',
+     SET paystack_subscription_status = 'not_renewing',
          updated_at = NOW()
-     WHERE stripe_customer_id = $1`,
+     WHERE paystack_customer_id = $1`,
     [customerId]
   );
   
@@ -147,10 +147,10 @@ async function handleChargeSuccess(data) {
   // Mark subscription as active (if it was past_due)
   await pool.query(
     `UPDATE portal_tiers 
-     SET stripe_subscription_status = 'active',
+     SET paystack_subscription_status = 'active',
          updated_at = NOW()
-     WHERE stripe_customer_id = $1 
-     AND stripe_subscription_status = 'past_due'`,
+     WHERE paystack_customer_id = $1 
+     AND paystack_subscription_status = 'past_due'`,
     [customerId]
   );
   
@@ -164,9 +164,9 @@ async function handleChargeFailed(data) {
   // Mark subscription as past_due
   await pool.query(
     `UPDATE portal_tiers 
-     SET stripe_subscription_status = 'past_due',
+     SET paystack_subscription_status = 'past_due',
          updated_at = NOW()
-     WHERE stripe_customer_id = $1`,
+     WHERE paystack_customer_id = $1`,
     [customerId]
   );
   
@@ -215,12 +215,12 @@ router.post('/manage-subscription', express.json(), async (req, res) => {
   
   try {
     const result = await pool.query(
-      'SELECT stripe_customer_id, stripe_subscription_id FROM portal_tiers WHERE portal_id = $1',
+      'SELECT paystack_customer_id, paystack_subscription_id FROM portal_tiers WHERE portal_id = $1',
       [portalId]
     );
     
-    const customerId = result.rows[0]?.stripe_customer_id;
-    const subscriptionCode = result.rows[0]?.stripe_subscription_id;
+    const customerId = result.rows[0]?.paystack_customer_id;
+    const subscriptionCode = result.rows[0]?.paystack_subscription_id;
     
     if (!customerId || !subscriptionCode) {
       return res.status(404).json({ error: 'No active subscription found' });
