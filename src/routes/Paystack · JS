@@ -1,242 +1,209 @@
-// src/routes/paystack.js - PayStack webhook handler for subscription management
-
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { Pool } = require('pg');
+const db = require('../db');
 const { setPortalTier } = require('../services/tierService');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-
 // PayStack webhook endpoint
-router.post('/webhook', express.json(), async (req, res) => {
-  const hash = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY)
-    .update(JSON.stringify(req.body))
-    .digest('hex');
-  
-  if (hash !== req.headers['x-paystack-signature']) {
-    console.error('[PayStack] Invalid webhook signature');
-    return res.status(400).send('Invalid signature');
-  }
-  
-  const event = req.body;
-  console.log(`[PayStack] Event received: ${event.event}`);
-  
+router.post('/webhook', async (req, res) => {
   try {
-    switch (event.event) {
-      case 'subscription.create':
-        await handleSubscriptionCreated(event.data);
-        break;
-        
-      case 'subscription.disable':
-        await handleSubscriptionDisabled(event.data);
-        break;
-        
-      case 'subscription.not_renew':
-        await handleSubscriptionNotRenew(event.data);
-        break;
-        
-      case 'charge.success':
-        await handleChargeSuccess(event.data);
-        break;
-        
-      case 'charge.failed':
-        await handleChargeFailed(event.data);
-        break;
-        
-      default:
-        console.log(`[PayStack] Unhandled event type: ${event.event}`);
+    // Verify PayStack signature
+    const hash = crypto
+      .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+    
+    if (hash !== req.headers['x-paystack-signature']) {
+      console.log('Invalid PayStack signature');
+      return res.status(401).json({ error: 'Invalid signature' });
     }
-  } catch (err) {
-    console.error(`[PayStack] Error handling ${event.event}:`, err.message);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-  
-  res.json({ received: true });
-});
 
-// Handle subscription creation
-async function handleSubscriptionCreated(data) {
-  const customerId = data.customer.customer_code;
-  const subscriptionCode = data.subscription_code;
-  const planCode = data.plan.plan_code;
-  
-  // Map PayStack plan codes to tiers
-  const planToTier = {
-    [process.env.PAYSTACK_PLAN_STARTER]: 'STARTER',
-    [process.env.PAYSTACK_PLAN_PRO]: 'PRO',
-    [process.env.PAYSTACK_PLAN_BUSINESS]: 'BUSINESS'
-  };
-  
-  const tier = planToTier[planCode];
-  
-  if (!tier) {
-    console.error(`[PayStack] Unknown plan code: ${planCode}`);
-    return;
-  }
-  
-  // Get portal_id from metadata (should be passed during checkout)
-  const portalId = data.metadata?.portal_id;
-  
-  if (!portalId) {
-    console.error('[PayStack] No portal_id in subscription metadata');
-    return;
-  }
-  
-  // Update portal tier
-  await setPortalTier(portalId, tier, {
-    customerId,
-    subscriptionId: subscriptionCode,
-    subscriptionStatus: 'active'
-  });
-  
-  console.log(`[PayStack] ✅ Subscription created: Portal ${portalId} -> ${tier}`);
-}
+    const { event, data } = req.body;
+    console.log(`PayStack webhook received: ${event}`);
 
-// Handle subscription disabled (cancelled)
-async function handleSubscriptionDisabled(data) {
-  const customerId = data.customer.customer_code;
-  
-  // Find portal by customer ID
-  const result = await pool.query(
-    'SELECT portal_id FROM portal_tiers WHERE paystack_customer_id = $1',
-    [customerId]
-  );
-  
-  if (result.rows.length === 0) {
-    console.error(`[PayStack] No portal found for customer ${customerId}`);
-    return;
-  }
-  
-  const portalId = result.rows[0].portal_id;
-  
-  // Downgrade to FREE
-  await setPortalTier(portalId, 'FREE', {
-    subscriptionId: null,
-    subscriptionStatus: 'canceled'
-  });
-  
-  console.log(`[PayStack] ⛔ Subscription disabled: Portal ${portalId} -> FREE`);
-}
+    // Handle subscription created
+    if (event === 'subscription.create') {
+      const { customer, plan, subscription_code, status } = data;
+      
+      // Find portal by PayStack customer ID
+      const portal = await db.query(
+        'SELECT portal_id FROM portal_tiers WHERE paystack_customer_id = $1',
+        [customer.customer_code]
+      );
 
-// Handle subscription not renewing
-async function handleSubscriptionNotRenew(data) {
-  const customerId = data.customer.customer_code;
-  
-  // Update subscription status to 'not_renewing'
-  await pool.query(
-    `UPDATE portal_tiers 
-     SET paystack_subscription_status = 'not_renewing',
-         updated_at = NOW()
-     WHERE paystack_customer_id = $1`,
-    [customerId]
-  );
-  
-  console.log(`[PayStack] ⚠️ Subscription not renewing: ${customerId}`);
-}
+      if (portal.rows.length > 0) {
+        const portalId = portal.rows[0].portal_id;
+        
+        // Map PayStack plan to tier
+        let tier = 'trial';
+        if (plan.plan_code === process.env.PAYSTACK_PLAN_STARTER) {
+          tier = 'starter';
+        } else if (plan.plan_code === process.env.PAYSTACK_PLAN_PRO) {
+          tier = 'pro';
+        } else if (plan.plan_code === process.env.PAYSTACK_PLAN_BUSINESS) {
+          tier = 'business';
+        }
 
-// Handle successful charge
-async function handleChargeSuccess(data) {
-  const customerId = data.customer.customer_code;
-  
-  // Mark subscription as active (if it was past_due)
-  await pool.query(
-    `UPDATE portal_tiers 
-     SET paystack_subscription_status = 'active',
-         updated_at = NOW()
-     WHERE paystack_customer_id = $1 
-     AND paystack_subscription_status = 'past_due'`,
-    [customerId]
-  );
-  
-  console.log(`[PayStack] ✅ Charge succeeded: ${customerId}`);
-}
+        // Update portal with subscription details
+        await db.query(
+          `UPDATE portal_tiers 
+           SET tier = $1, 
+               paystack_subscription_id = $2, 
+               paystack_subscription_status = $3
+           WHERE portal_id = $4`,
+          [tier, subscription_code, status, portalId]
+        );
 
-// Handle failed charge
-async function handleChargeFailed(data) {
-  const customerId = data.customer.customer_code;
-  
-  // Mark subscription as past_due
-  await pool.query(
-    `UPDATE portal_tiers 
-     SET paystack_subscription_status = 'past_due',
-         updated_at = NOW()
-     WHERE paystack_customer_id = $1`,
-    [customerId]
-  );
-  
-  console.log(`[PayStack] ⚠️ Charge failed: ${customerId} - marked as past_due`);
-}
+        console.log(`Upgraded portal ${portalId} to ${tier} tier`);
+      }
+    }
 
-// API endpoint to get subscription page URL
-router.post('/get-subscription-url', express.json(), async (req, res) => {
-  const { portalId, planCode } = req.body;
-  
-  if (!portalId || !planCode) {
-    return res.status(400).json({ error: 'Missing portalId or planCode' });
-  }
-  
-  try {
-    // Get portal email from database (or use a default)
-    const result = await pool.query(
-      `SELECT t.data->>'user_email' as email 
-       FROM tokens t 
-       WHERE t.portal_id = $1 
-       LIMIT 1`,
-      [portalId]
-    );
-    
-    const email = result.rows[0]?.email || 'customer@example.com';
-    
-    // PayStack subscription page URL format
-    // The plan subscription page was created when you ticked the checkbox
-    const subscriptionUrl = `https://paystack.com/pay/${planCode}?email=${encodeURIComponent(email)}&metadata=${encodeURIComponent(JSON.stringify({ portal_id: portalId }))}`;
-    
-    res.json({ url: subscriptionUrl });
-    
-  } catch (err) {
-    console.error('[PayStack] Error creating subscription URL:', err.message);
-    res.status(500).json({ error: err.message });
+    // Handle subscription disabled/cancelled
+    if (event === 'subscription.disable') {
+      const { subscription_code } = data;
+      
+      const portal = await db.query(
+        'SELECT portal_id FROM portal_tiers WHERE paystack_subscription_id = $1',
+        [subscription_code]
+      );
+
+      if (portal.rows.length > 0) {
+        const portalId = portal.rows[0].portal_id;
+        
+        // Downgrade to FREE tier (not trial)
+        await db.query(
+          `UPDATE portal_tiers 
+           SET tier = 'free', 
+               paystack_subscription_status = 'cancelled'
+           WHERE portal_id = $1`,
+          [portalId]
+        );
+
+        console.log(`Downgraded portal ${portalId} to FREE tier after cancellation`);
+      }
+    }
+
+    // Handle successful charge
+    if (event === 'charge.success') {
+      const { customer, metadata } = data;
+      
+      if (metadata && metadata.subscription_code) {
+        await db.query(
+          `UPDATE portal_tiers 
+           SET paystack_subscription_status = 'active'
+           WHERE paystack_subscription_id = $1`,
+          [metadata.subscription_code]
+        );
+
+        console.log(`Marked subscription ${metadata.subscription_code} as active`);
+      }
+    }
+
+    // Handle failed charge
+    if (event === 'charge.failed') {
+      const { customer, metadata } = data;
+      
+      if (metadata && metadata.subscription_code) {
+        await db.query(
+          `UPDATE portal_tiers 
+           SET paystack_subscription_status = 'past_due'
+           WHERE paystack_subscription_id = $1`,
+          [metadata.subscription_code]
+        );
+
+        console.log(`Marked subscription ${metadata.subscription_code} as past_due`);
+      }
+    }
+
+    res.status(200).json({ received: true });
+
+  } catch (error) {
+    console.error('PayStack webhook error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
 
-// API endpoint to manage subscription (cancel, etc.)
-router.post('/manage-subscription', express.json(), async (req, res) => {
-  const { portalId } = req.body;
-  
-  if (!portalId) {
-    return res.status(400).json({ error: 'Missing portalId' });
-  }
-  
+// Create PayStack customer and return checkout URL
+router.post('/create-subscription', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT paystack_customer_id, paystack_subscription_id FROM portal_tiers WHERE portal_id = $1',
-      [portalId]
-    );
-    
-    const customerId = result.rows[0]?.paystack_customer_id;
-    const subscriptionCode = result.rows[0]?.paystack_subscription_id;
-    
-    if (!customerId || !subscriptionCode) {
-      return res.status(404).json({ error: 'No active subscription found' });
+    const { portalId, email, plan } = req.body;
+
+    if (!portalId || !email || !plan) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
-    
-    // PayStack doesn't have a customer portal like Stripe
-    // Users manage subscriptions via email links or your custom UI
-    res.json({ 
-      message: 'To manage your subscription, please contact support or use the cancellation link sent to your email.',
-      subscriptionCode 
+
+    // Validate plan
+    const validPlans = ['starter', 'pro', 'business'];
+    if (!validPlans.includes(plan)) {
+      return res.status(400).json({ error: 'Invalid plan' });
+    }
+
+    // Get PayStack plan code from environment
+    const planMap = {
+      starter: process.env.PAYSTACK_PLAN_STARTER,
+      pro: process.env.PAYSTACK_PLAN_PRO,
+      business: process.env.PAYSTACK_PLAN_BUSINESS
+    };
+
+    const paystackPlanCode = planMap[plan];
+    if (!paystackPlanCode) {
+      return res.status(500).json({ error: 'Plan not configured in environment' });
+    }
+
+    // Initialize PayStack transaction
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email,
+        amount: getPlanAmount(plan), // in kobo (cents)
+        plan: paystackPlanCode,
+        callback_url: `${process.env.APP_URL || 'https://propbridge-production.up.railway.app'}/settings?portal_id=${portalId}`,
+        metadata: {
+          portal_id: portalId,
+          plan: plan
+        }
+      })
     });
-    
-  } catch (err) {
-    console.error('[PayStack] Error getting subscription info:', err.message);
-    res.status(500).json({ error: err.message });
+
+    const data = await response.json();
+
+    if (data.status) {
+      // Store customer reference
+      await db.query(
+        `UPDATE portal_tiers 
+         SET paystack_customer_id = $1
+         WHERE portal_id = $2`,
+        [data.data.reference, portalId]
+      );
+
+      res.json({
+        success: true,
+        checkout_url: data.data.authorization_url,
+        reference: data.data.reference
+      });
+    } else {
+      res.status(500).json({ error: data.message });
+    }
+
+  } catch (error) {
+    console.error('Create subscription error:', error);
+    res.status(500).json({ error: 'Failed to create subscription' });
   }
 });
+
+// Helper function to get plan amounts (in kobo - PayStack uses smallest currency unit)
+function getPlanAmount(plan) {
+  const amounts = {
+    starter: 29900, // R299.00 = 29900 kobo
+    pro: 79900,     // R799.00 = 79900 kobo  
+    business: 199900 // R1999.00 = 199900 kobo
+  };
+  return amounts[plan] || 0;
+}
 
 module.exports = router;
