@@ -1,151 +1,1414 @@
-// src/routes/settings.js
-const express       = require('express');
-const router        = express.Router();
-const path          = require('path');
-const { getClient } = require('../services/hubspotClient');
-const { Pool }      = require('pg');
-const { validateMapping, getCompatibleTypes } = require('../utils/fieldTypeCompatibility');
-const { getPortalTier } = require('../services/tierService');
-
-let pool = null;
-
-function getPool() {
-  if (!pool && process.env.DATABASE_URL) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    });
-    pool.query(`
-      CREATE TABLE IF NOT EXISTS sync_rules (
-        portal_id TEXT PRIMARY KEY,
-        rules JSONB NOT NULL,
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-    `).catch(err => console.error('[DB] sync_rules table error:', err.message));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncStation — Sync Rules</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- FIELD TYPE VALIDATION -->
+<link rel="stylesheet" href="/css/fieldTypeValidation.css">
+<script src="/js/fieldTypeValidation.js"></script>
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --accent: #ff6b35;
+    --accent2: #ffb347;
+    --text: #f0f0f4;
+    --muted: #8888a0;
+    --success: #4ade80;
+    --error: #f87171;
+    --radius: 10px;
   }
-  return pool;
-}
 
-const memRulesStore = {};
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-async function getRules(portalId) {
-  const p = getPool();
-  if (p) {
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    isolation: isolate;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    flex: 1;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .header-nav {
+    display: flex;
+    gap: 4px;
+    background: var(--surface2);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .header-nav a {
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 7px 20px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    color: var(--muted);
+  }
+
+  .header-nav a.active {
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .header-nav a:hover {
+    color: var(--text);
+  }
+
+  .portal-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    flex: 1;
+    text-align: right;
+  }
+
+  .main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+
+  .page-subtitle {
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 32px;
+  }
+
+  .rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .rule-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .rule-card:hover { border-color: #44445a; }
+  .rule-card.active { border-left: 3px solid var(--accent); }
+
+  .rule-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    gap: 14px;
+  }
+
+  .rule-toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  .rule-toggle input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--surface2);
+    border-radius: 22px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+
+  input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+  input:checked + .toggle-slider:before { transform: translateX(18px); background: white; }
+
+  .rule-info { flex: 1; }
+
+  .rule-name {
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+
+  .rule-meta {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .rule-meta span {
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .rule-actions { display: flex; gap: 8px; }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.15s;
+  }
+
+  .btn-icon:hover { background: var(--surface2); color: var(--text); }
+  .btn-icon.delete:hover { background: #3d1414; color: var(--error); border-color: var(--error); }
+
+  .rule-mappings {
+    padding: 0 20px 16px 74px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mapping-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mapping-pill .arrow { color: var(--accent); }
+
+  .btn-add {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255,107,53,0.04);
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 32px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  select, input[type="text"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 9px 12px;
+    width: 100%;
+    transition: border-color 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+
+  select:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  select option { background: var(--surface2); }
+
+  .mappings-section { margin-bottom: 24px; }
+
+  .mappings-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mappings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .mapping-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .mapping-arrow {
+    color: var(--accent);
+    font-size: 18px;
+    text-align: center;
+    font-weight: 300;
+  }
+
+  .btn-remove-mapping {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .btn-remove-mapping:hover { background: #3d1414; color: var(--error); border-color: var(--error); }
+
+  .btn-add-mapping {
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.15s;
+  }
+
+  .btn-add-mapping:hover { border-color: var(--accent); color: var(--accent); }
+
+  .modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { color: var(--text); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+
+  .btn-primary:hover { background: #ff8555; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-title { font-size: 18px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+  .empty-desc { font-size: 14px; line-height: 1.6; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 300;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-left: 3px solid var(--success); }
+  .toast.error { border-left: 3px solid var(--error); }
+
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .stat-card:hover {
+    border-color: #44445a;
+  }
+
+  .stat-card.clickable:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .stat-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 28px;
+    font-weight: 500;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-value.errors {
+    color: var(--error);
+  }
+
+  .stat-label { font-size: 12px; color: var(--muted); }
+  .loading { color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; }
+
+  .notif-banner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .notif-info    { border-left: 3px solid #60a5fa; }
+  .notif-warning { border-left: 3px solid #fbbf24; }
+  .notif-error   { border-left: 3px solid var(--error); }
+  .notif-success { border-left: 3px solid var(--success); }
+  
+  /* Validation feedback styling within mapping rows */
+  .mapping-validation {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+
+  /* ERROR LOG STYLES */
+  .error-log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+
+  .error-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .error-log-title {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .error-log-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-small:hover {
+    color: var(--text);
+    border-color: #44445a;
+  }
+
+  .error-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .error-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--error);
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .error-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .error-message {
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .error-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .error-meta span {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .error-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+
+  /* PayStack Upgrade UI Styles */
+  .upgrade-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 32px;
+  }
+
+  .upgrade-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .plan-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .plan-card {
+    position: relative;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .plan-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .plan-featured {
+    border: 2px solid var(--accent);
+  }
+
+  .plan-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 4px 12px;
+    border-radius: 12px;
+  }
+
+  .plan-header {
+    margin-bottom: 20px;
+  }
+
+  .plan-card h4 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--text);
+  }
+
+  .plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+  }
+
+  .plan-price .currency {
+    font-size: 18px;
+    color: var(--muted);
+  }
+
+  .plan-price .amount {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .plan-price .period {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 24px 0;
+    flex: 1;
+  }
+
+  .plan-features li {
+    padding: 8px 0;
+    color: var(--text);
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .plan-features li:last-child {
+    border-bottom: none;
+  }
+
+  .plan-features li:before {
+    content: '✓';
+    color: var(--success);
+    font-weight: bold;
+    margin-right: 8px;
+  }
+
+  .btn-upgrade {
+    width: 100%;
+    padding: 12px 24px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: auto;
+  }
+
+  .btn-upgrade:hover {
+    background: var(--accent2);
+    transform: scale(1.02);
+  }
+
+  .plan-featured .btn-upgrade {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⇄</div>
+    SyncStation
+  </div>
+  <nav class="header-nav">
+    <a id="navSettings" href="#" class="active">Sync Rules</a>
+    <a id="navAccount" href="#">Account</a>
+  </nav>
+  <div class="portal-badge" id="portalBadge">Loading...</div>
+</div>
+
+<div id="notificationBanners" style="max-width:900px;margin:16px auto 0;padding:0 24px"></div>
+
+<div class="main">
+  <div class="page-title">Sync Rules</div>
+  <div class="page-subtitle">Automatically sync property values between associated CRM objects.</div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-label">Total rules</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statActive">0</div>
+      <div class="stat-label">Active rules</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statMappings">0</div>
+      <div class="stat-label">Property mappings</div>
+    </div>
+    <div class="stat-card clickable" onclick="toggleErrorLog()">
+      <div class="stat-value errors" id="statErrors">0</div>
+      <div class="stat-label">Sync errors</div>
+    </div>
+  </div>
+
+  <!-- PayStack Upgrade Section -->
+  <div id="upgradeSection" style="display: none;">
+    <div class="upgrade-container">
+      <div class="upgrade-header">
+        <div>
+          <h3 style="margin: 0 0 4px 0; font-size: 18px;">Upgrade Your Plan</h3>
+          <p style="margin: 0; color: var(--muted); font-size: 14px;">
+            Current: <span id="currentTierName" style="color: var(--accent); font-weight: 500;">TRIAL</span> 
+            · <span id="currentMappingLimit">30</span> property mappings
+          </p>
+        </div>
+      </div>
+
+      <div class="plan-cards">
+        <!-- Starter Plan -->
+        <div class="plan-card">
+          <div class="plan-header">
+            <h4>Starter</h4>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">85</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <ul class="plan-features">
+            <li>10 property mappings</li>
+            <li>Real-time webhook sync for standard objects</li>
+            <li>15-min API sync for custom objects</li>
+            <li>Flexible field type mapping</li>
+          </ul>
+          <button class="btn-upgrade" onclick="upgradeToPlan('starter')">
+            Upgrade to Starter
+          </button>
+        </div>
+
+        <!-- Pro Plan -->
+        <div class="plan-card plan-featured">
+          <div class="plan-badge">POPULAR</div>
+          <div class="plan-header">
+            <h4>Pro</h4>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">510</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <ul class="plan-features">
+            <li>30 property mappings</li>
+            <li>Real-time webhook sync for standard objects</li>
+            <li>15-min API sync for custom objects</li>
+            <li>Flexible field type mapping</li>
+          </ul>
+          <button class="btn-upgrade" onclick="upgradeToPlan('pro')">
+            Upgrade to Pro
+          </button>
+        </div>
+
+        <!-- Business Plan -->
+        <div class="plan-card">
+          <div class="plan-header">
+            <h4>Business</h4>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">850</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <ul class="plan-features">
+            <li>100 property mappings</li>
+            <li>Real-time webhook sync for standard objects</li>
+            <li>15-min API sync for custom objects</li>
+            <li>Flexible field type mapping</li>
+          </ul>
+          <button class="btn-upgrade" onclick="upgradeToPlan('business')">
+            Upgrade to Business
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ERROR LOG -->
+  <div class="error-log" id="errorLog" style="display:none">
+    <div class="error-log-header">
+      <div class="error-log-title">
+        <span>⚠️</span>
+        <span>Sync Error Log</span>
+      </div>
+      <div class="error-log-actions">
+        <button class="btn-small" onclick="loadErrors()">🔄 Refresh</button>
+        <button class="btn-small" onclick="clearErrors()">🗑 Clear All</button>
+        <button class="btn-small" onclick="toggleErrorLog()">✕ Close</button>
+      </div>
+    </div>
+    <div class="error-list" id="errorList">
+      <div class="error-empty">
+        <div style="font-size:32px;margin-bottom:8px">✅</div>
+        <div>No sync errors</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rules-list" id="rulesList"></div>
+
+  <button class="btn-add" onclick="openModal()">
+    <span style="font-size:18px">+</span> Add sync rule
+  </button>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span>⇄</span>
+      <span id="modalTitle">New Sync Rule</span>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Source Object</label>
+        <select id="sourceObject" onchange="loadProperties()">
+          <option value="">Loading objects...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Target Object</label>
+        <select id="targetObject" onchange="loadProperties()">
+          <option value="">Loading objects...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Association Rule</label>
+        <select id="assocRule" onchange="toggleLabelField()">
+          <option value="all">All associated records</option>
+          <option value="recent">Most recently associated</option>
+          <option value="first">First associated</option>
+          <option value="labeled">Specific label only</option>
+        </select>
+      </div>
+      <div class="form-group" id="labelGroup" style="display:none">
+        <label>Association Label</label>
+        <input type="text" id="assocLabel" placeholder="e.g. Primary">
+      </div>
+      <div class="form-group">
+        <label>Sync Direction</label>
+        <select id="syncDirection">
+          <option value="one_way">One-way: source → target</option>
+          <option value="two_way">Bidirectional (most recent wins)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Skip if target has value?</label>
+        <select id="skipIfHasValue">
+          <option value="false">No — always overwrite</option>
+          <option value="true">Yes — never overwrite</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Rule Name</label>
+        <input type="text" id="ruleName" placeholder="e.g. Contact → Company sync">
+      </div>
+    </div>
+
+    <div class="mappings-section">
+      <div class="mappings-title">
+        Property Mappings
+        <span class="loading" id="propsStatus"></span>
+      </div>
+      <div class="mappings-list" id="mappingsList"></div>
+      <button class="btn-add-mapping" onclick="checkAndAddMapping()">+ Add property mapping</button>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const portalId  = urlParams.get('portalId') || 'Demo';
+  
+  // CRITICAL: Use portal-specific localStorage key to prevent cross-portal contamination
+  const storageKey = `propbridge_rules_${portalId}`;
+  let rules = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  let editingId = null;
+  let sourceProps = [];
+  let targetProps = [];
+  let availableObjects = [];
+  let syncErrors = [];
+
+  document.getElementById('portalBadge').textContent  = 'Portal ' + portalId;
+  document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
+  document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
+
+  // Load available objects from HubSpot
+  async function loadAvailableObjects() {
     try {
-      const result = await p.query('SELECT rules FROM sync_rules WHERE portal_id = $1', [String(portalId)]);
-      return result.rows[0]?.rules || [];
+      const response = await fetch('/settings/objects?portalId=' + portalId);
+      const data = await response.json();
+      
+      // Standard objects that always work
+      const standardObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts', standard: true },
+        { objectTypeId: 'companies', label: 'Companies', standard: true },
+        { objectTypeId: 'deals', label: 'Deals', standard: true },
+        { objectTypeId: 'tickets', label: 'Tickets', standard: true },
+        { objectTypeId: 'leads', label: 'Leads', standard: true }
+      ];
+      
+      // Add custom objects from API (like Projects)
+      const customObjects = (data.objects || [])
+        .filter(obj => !standardObjects.find(s => s.label === obj.label))
+        .map(obj => ({
+          objectTypeId: obj.objectTypeId || obj.name,
+          label: obj.label || obj.name,
+          custom: true
+        }));
+      
+      availableObjects = [...standardObjects, ...customObjects];
+      
+      // Populate dropdowns
+      populateObjectDropdowns();
+      
     } catch (err) {
-      console.error('[DB] Get rules error:', err.message);
+      console.error('[Settings] Failed to load objects:', err);
+      // Fallback to standard objects only
+      availableObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts' },
+        { objectTypeId: 'companies', label: 'Companies' },
+        { objectTypeId: 'deals', label: 'Deals' },
+        { objectTypeId: 'tickets', label: 'Tickets' },
+        { objectTypeId: 'leads', label: 'Leads' }
+      ];
+      populateObjectDropdowns();
     }
   }
-  return memRulesStore[portalId] || [];
-}
 
-async function saveRules(portalId, rules) {
-  const p = getPool();
-  if (p) {
+  function populateObjectDropdowns() {
+    const sourceSelect = document.getElementById('sourceObject');
+    const targetSelect = document.getElementById('targetObject');
+    
+    const options = '<option value="">Select object...</option>' + 
+      availableObjects.map(obj => 
+        `<option value="${obj.objectTypeId}">${obj.label}${obj.custom ? ' (Custom)' : ''}</option>`
+      ).join('');
+    
+    sourceSelect.innerHTML = options;
+    targetSelect.innerHTML = options;
+  }
+
+  // Load sync errors
+  async function loadErrors() {
     try {
-      await p.query(`
-        INSERT INTO sync_rules (portal_id, rules, updated_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (portal_id) DO UPDATE SET rules = $2, updated_at = NOW()
-      `, [String(portalId), JSON.stringify(rules)]);
+      const res = await fetch('/settings/errors?portalId=' + portalId);
+      if (!res.ok) {
+        console.log('Error endpoint returned:', res.status);
+        return;
+      }
+      const data = await res.json();
+      syncErrors = data.errors || [];
+      
+      document.getElementById('statErrors').textContent = syncErrors.length;
+      
+      const list = document.getElementById('errorList');
+      if (syncErrors.length === 0) {
+        list.innerHTML = `
+          <div class="error-empty">
+            <div style="font-size:32px;margin-bottom:8px">✅</div>
+            <div>No sync errors</div>
+          </div>
+        `;
+        return;
+      }
+      
+      list.innerHTML = syncErrors.map(err => {
+        const time = new Date(err.created_at).toLocaleString();
+        return `
+          <div class="error-item">
+            <div class="error-time">${time}</div>
+            <div class="error-message">${err.error_message || 'Unknown error'}</div>
+            <div class="error-meta">
+              ${err.rule_name ? `<span>Rule: ${err.rule_name}</span>` : ''}
+              ${err.source_object ? `<span>${err.source_object}${err.source_id ? ' ' + err.source_id : ''}</span>` : ''}
+              ${err.target_object ? `<span>→ ${err.target_object}</span>` : ''}
+              ${err.error_type ? `<span>${err.error_type}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      console.error('[Error Log] Failed to load:', err);
+    }
+  }
+
+  async function clearErrors() {
+    if (!confirm('Clear all sync errors?')) return;
+    
+    try {
+      await fetch('/settings/errors?portalId=' + portalId, { method: 'DELETE' });
+      syncErrors = [];
+      document.getElementById('statErrors').textContent = '0';
+      loadErrors();
+      showToast('✓ Error log cleared', 'success');
+    } catch (err) {
+      showToast('Failed to clear errors', 'error');
+    }
+  }
+
+  function toggleErrorLog() {
+    const log = document.getElementById('errorLog');
+    const isVisible = log.style.display !== 'none';
+    log.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) {
+      loadErrors();
+    }
+  }
+
+  // Load notifications
+  async function loadNotifications() {
+    try {
+      const res  = await fetch('/notifications?portalId=' + portalId);
+      const data = await res.json();
+      const banners = document.getElementById('notificationBanners');
+      const notifications = data.notifications || [];
+      if (!notifications.length) { banners.innerHTML = ''; return; }
+      const colors = { info: '#60a5fa', warning: '#fbbf24', error: '#f87171', success: '#4ade80' };
+      banners.innerHTML = notifications.map(n => `
+        <div class="notif-banner notif-${n.type}">
+          <div>
+            <strong style="font-size:14px">${n.title}</strong>
+            <p style="color:var(--muted);font-size:13px;margin-top:2px">${n.message}</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            ${n.action_label && n.action_url ? `<a href="${n.action_url}${n.action_url.includes('?') ? '&' : '?'}portalId=${portalId}" style="background:var(--accent);color:white;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px">${n.action_label}</a>` : ''}
+            <button onclick="dismissNotification(${n.id}, this.closest('.notif-banner'))" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px">✕</button>
+          </div>
+        </div>
+      `).join('');
+    } catch(e) {}
+  }
+
+  async function dismissNotification(id, el) {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 0.3s';
+    setTimeout(() => el.remove(), 300);
+    await fetch('/notifications/' + id + '/read', { method: 'POST' });
+  }
+
+  function render() {
+    const list     = document.getElementById('rulesList');
+    const total    = rules.length;
+    const active   = rules.filter(r => r.enabled).length;
+    const mappings = rules.reduce((sum, r) => sum + (r.mappings?.length || 0), 0);
+
+    document.getElementById('statTotal').textContent    = total;
+    document.getElementById('statActive').textContent   = active;
+    document.getElementById('statMappings').textContent = mappings;
+
+    if (total === 0) {
+      list.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">⇄</div>
+        <div class="empty-title">No sync rules yet</div>
+        <div class="empty-desc">Create your first rule to start syncing properties<br>between associated CRM objects automatically.</div>
+      </div>`;
       return;
-    } catch (err) {
-      console.error('[DB] Save rules error:', err.message);
+    }
+
+    list.innerHTML = rules.map(rule => `
+      <div class="rule-card ${rule.enabled ? 'active' : ''}">
+        <div class="rule-header">
+          <label class="rule-toggle">
+            <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleRule('${rule.id}', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="rule-info">
+            <div class="rule-name">${rule.name || 'Unnamed rule'}</div>
+            <div class="rule-meta">
+              <span>${rule.sourceObject} → ${rule.targetObject}</span>
+              <span>${rule.direction === 'two_way' ? '⇄ Bidirectional' : '→ One-way'}</span>
+              <span>${rule.assocRule}</span>
+              <span>${rule.mappings?.length || 0} mappings</span>
+            </div>
+          </div>
+          <div class="rule-actions">
+            <button class="btn-icon" onclick="editRule('${rule.id}')" title="Edit">✎</button>
+            <button class="btn-icon delete" onclick="deleteRule('${rule.id}')" title="Delete">✕</button>
+          </div>
+        </div>
+        ${rule.mappings?.length ? `
+        <div class="rule-mappings">
+          ${rule.mappings.map(m => `
+            <div class="mapping-pill">
+              ${m.sourceLabel || m.source}
+              <span class="arrow">→</span>
+              ${m.targetLabel || m.target}
+            </div>
+          `).join('')}
+        </div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function toggleRule(id, enabled) {
+    rules = rules.map(r => r.id === id ? { ...r, enabled } : r);
+    saveRules();
+    render();
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    }).catch(() => {});
+    showToast(enabled ? '✓ Rule enabled' : 'Rule disabled', enabled ? 'success' : '');
+  }
+
+  function deleteRule(id) {
+    if (!confirm('Delete this sync rule?')) return;
+    rules = rules.filter(r => r.id !== id);
+    saveRules();
+    render();
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    }).catch(() => {});
+    showToast('Rule deleted', '');
+  }
+
+  function editRule(id) {
+    const rule = rules.find(r => r.id === id);
+    if (!rule) return;
+    editingId = id;
+    document.getElementById('modalTitle').textContent      = 'Edit Sync Rule';
+    document.getElementById('sourceObject').value          = rule.sourceObject;
+    document.getElementById('targetObject').value          = rule.targetObject;
+    document.getElementById('assocRule').value             = rule.assocRule;
+    document.getElementById('assocLabel').value            = rule.assocLabel || '';
+    document.getElementById('syncDirection').value         = rule.direction;
+    document.getElementById('skipIfHasValue').value        = rule.skipIfHasValue || 'false';
+    document.getElementById('ruleName').value              = rule.name || '';
+    toggleLabelField();
+    loadProperties().then(() => {
+      document.getElementById('mappingsList').innerHTML = '';
+      (rule.mappings || []).forEach(m => addMappingRow(m.source, m.target));
+    });
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function openModal() {
+    editingId = null;
+    document.getElementById('modalTitle').textContent   = 'New Sync Rule';
+    document.getElementById('sourceObject').value       = '';
+    document.getElementById('targetObject').value       = '';
+    document.getElementById('assocRule').value          = 'all';
+    document.getElementById('assocLabel').value         = '';
+    document.getElementById('syncDirection').value      = 'one_way';
+    document.getElementById('skipIfHasValue').value     = 'false';
+    document.getElementById('ruleName').value           = '';
+    document.getElementById('mappingsList').innerHTML   = '';
+    document.getElementById('propsStatus').textContent  = '';
+    toggleLabelField();
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+
+  function toggleLabelField() {
+    const val = document.getElementById('assocRule').value;
+    document.getElementById('labelGroup').style.display = val === 'labeled' ? 'flex' : 'none';
+  }
+
+  async function loadProperties() {
+    const src = document.getElementById('sourceObject').value;
+    const tgt = document.getElementById('targetObject').value;
+    if (!src && !tgt) return;
+    document.getElementById('propsStatus').textContent = 'Loading...';
+    try {
+      const [srcRes, tgtRes] = await Promise.all([
+        src ? fetch('/settings/properties/' + src + '?portalId=' + portalId).then(r => r.json()) : Promise.resolve({ properties: [] }),
+        tgt ? fetch('/settings/properties/' + tgt + '?portalId=' + portalId).then(r => r.json()) : Promise.resolve({ properties: [] })
+      ]);
+      sourceProps = srcRes.properties || [];
+      targetProps = tgtRes.properties || [];
+      document.getElementById('propsStatus').textContent = sourceProps.length + ' source / ' + targetProps.length + ' target props loaded';
+      refreshMappingSelects();
+    } catch (e) {
+      document.getElementById('propsStatus').textContent = 'Could not load properties';
     }
   }
-  memRulesStore[portalId] = rules;
-}
 
-// All known object types to test
-const OBJECTS_TO_TEST = [
-  { name: 'contacts',  label: 'Contacts' },
-  { name: 'companies', label: 'Companies' },
-  { name: 'deals',     label: 'Deals' },
-  { name: 'tickets',   label: 'Tickets' },
-  { name: 'leads',     label: 'Leads' },
-  { name: 'projects',  label: 'Projects', objectTypeId: '0-970' },  // Hardcoded for portal 26123886
-  { name: 'services',  label: 'Services' },
-  { name: 'courses',   label: 'Courses' },
-  { name: 'listings',  label: 'Listings' }
-];
-
-// Cache available objects per portal (5 min TTL)
-const objectsCache = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
-// GET /settings
-router.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/settings.html'));
-});
-
-// GET /settings/errors - Return sync errors for a portal
-router.get('/errors', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-  
-  // Prevent browser caching
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  
-  // TODO: Implement actual error fetching from sync_logs table
-  // For now, return empty errors to prevent frontend crashes
-  res.json({ errors: [] });
-});
-
-// DELETE /settings/errors - Clear all errors for a portal
-router.delete('/errors', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-  
-  // TODO: Implement actual error clearing
-  res.json({ ok: true });
-});
-
-// GET /settings/rules
-router.get('/rules', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-  
-  // Prevent browser caching of portal-specific data
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  
-  const rules = await getRules(portalId);
-  res.json({ rules });
-});
-
-// POST /settings/rules - WITH FIELD TYPE VALIDATION
-router.post('/rules', async (req, res) => {
-  const { portalId, rules } = req.body;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-  
-  // CHECK TIER MAPPING LIMIT FIRST
-  try {
-    const tierInfo = await getPortalTier(portalId);
-    const tier = tierInfo.tier || 'trial';
+  function buildPropOptions(props, selectedVal, filterByType) {
+    if (!props.length) return '<option value="">Select object first...</option>';
     
-    // Define tier limits (must match frontend)
-    const tierLimits = {
-      free: 999999,
-      trial: 30,
-      starter: 10,
-      pro: 30,
-      business: 100
-    };
+    let filtered = props;
     
-    const limit = tierLimits[tier] || 30;
+    // Filter properties by compatible types if specified
+    if (filterByType && window.filterCompatibleProperties) {
+      filtered = window.filterCompatibleProperties(props, filterByType);
+    }
     
-    // Count total mappings across ALL rules
-    const totalMappings = (rules || []).reduce((sum, rule) => {
-      return sum + (rule.mappings?.length || 0);
-    }, 0);
+    return '<option value="">Select property...</option>' +
+      filtered.map(p => {
+        const typeName = window.getTypeName ? window.getTypeName(p.type) : p.type;
+        return `<option value="${p.name}" data-type="${p.type}" ${p.name === selectedVal ? 'selected' : ''}>${p.label} (${typeName})</option>`;
+      }).join('');
+  }
+
+  function refreshMappingSelects() {
+    document.querySelectorAll('.src-select').forEach(sel => {
+      const cur = sel.value;
+      sel.innerHTML = buildPropOptions(sourceProps, cur);
+    });
+    document.querySelectorAll('.tgt-select').forEach(sel => {
+      const cur = sel.value;
+      sel.innerHTML = buildPropOptions(targetProps, cur);
+    });
+  }
+
+  // Check if user can add more property mappings
+  async function canAddMapping() {
+    try {
+      const response = await fetch('/settings/tier?portalId=' + portalId);
+      const data = await response.json();
+      
+      const tier = data.tier || 'trial';
+      const limits = {
+        free: 999999,
+        trial: 30,
+        starter: 10,
+        pro: 30,
+        business: 100
+      };
+      
+      const tierLimit = limits[tier];
+      
+      // Count total mappings across ALL rules
+      const totalMappings = rules.reduce((sum, rule) => {
+        return sum + (rule.mappings?.length || 0);
+      }, 0);
+      
+      // Count mappings currently in the modal
+      const modalMappings = document.querySelectorAll('#mappingsList .mapping-row').length;
+      
+      if (totalMappings + modalMappings >= tierLimit) {
+        return {
+          allowed: false,
+          tier: tier,
+          limit: tierLimit,
+          current: totalMappings
+        };
+      }
+      
+      return { allowed: true };
+    } catch (err) {
+      console.error('[Mapping Limit] Error checking:', err);
+      return { allowed: true };  // Allow on error to not block users
+    }
+  }
+
+  async function checkAndAddMapping() {
+    const check = await canAddMapping();
     
-    // Block if over limit
-    if (totalMappings > limit) {
+    if (!check.allowed) {
+      // Show upgrade prompt
       const tierNames = {
         trial: 'Trial',
         starter: 'Starter',
@@ -153,453 +1416,329 @@ router.post('/rules', async (req, res) => {
         business: 'Business'
       };
       
-      return res.status(400).json({ 
-        error: `Mapping limit exceeded`,
-        message: `You have ${totalMappings} property mappings but your ${tierNames[tier]} plan allows ${limit}.\n\nPlease remove ${totalMappings - limit} mapping(s) or upgrade your plan.`,
-        limit: limit,
-        current: totalMappings,
-        tier: tier
-      });
+      alert(`You've reached your limit of ${check.limit} property mappings on the ${tierNames[check.tier]} plan.\n\nUpgrade to add more mappings:\n• Starter: 10 mappings (R85/mo)\n• Pro: 30 mappings (R510/mo)\n• Business: 100 mappings (R850/mo)\n\nGo to Settings to upgrade.`);
+      return;
     }
-  } catch (err) {
-    console.error('[Settings] Error checking tier limit:', err.message);
-    // Continue even if tier check fails (don't block legitimate saves)
-  }
-  
-  // Validate each rule's mappings for field type compatibility
-  try {
-    const client = await getClient(portalId);
-    const validationErrors = [];
-    const validationWarnings = [];
     
-    for (const rule of rules || []) {
-      if (!rule.mappings || rule.mappings.length === 0) continue;
-      
-      // Fetch properties for source and target objects
-      let sourceProperties = [];
-      let targetProperties = [];
-      
-      try {
-        const sourceRes = await client.crm.properties.coreApi.getAll(rule.sourceObject);
-        sourceProperties = sourceRes.results || [];
-      } catch (err) {
-        console.log(`[Validation] Could not fetch ${rule.sourceObject} properties:`, err.message);
+    // Allowed - add the mapping
+    addMappingRow();
+  }
+
+  function addMappingRow(srcVal, tgtVal) {
+    const list = document.getElementById('mappingsList');
+    const div  = document.createElement('div');
+    div.className = 'mapping-row';
+    div.innerHTML = `
+      <select class="src-select">${buildPropOptions(sourceProps, srcVal || '')}</select>
+      <div class="mapping-arrow">→</div>
+      <select class="tgt-select">${buildPropOptions(targetProps, tgtVal || '')}</select>
+      <button class="btn-remove-mapping" onclick="this.parentElement.remove()">×</button>
+    `;
+    list.appendChild(div);
+    
+    // Add validation
+    const srcSelect = div.querySelector('.src-select');
+    const tgtSelect = div.querySelector('.tgt-select');
+    
+    // When source changes, filter target options
+    srcSelect.addEventListener('change', function() {
+      const selectedProp = sourceProps.find(p => p.name === this.value);
+      if (selectedProp && window.filterCompatibleProperties) {
+        const currentTarget = tgtSelect.value;
+        tgtSelect.innerHTML = buildPropOptions(targetProps, currentTarget, selectedProp.type);
       }
+    });
+    
+    // When target changes, validate the mapping
+    tgtSelect.addEventListener('change', function() {
+      const srcProp = sourceProps.find(p => p.name === srcSelect.value);
+      const tgtProp = targetProps.find(p => p.name === this.value);
       
-      try {
-        const targetRes = await client.crm.properties.coreApi.getAll(rule.targetObject);
-        targetProperties = targetRes.results || [];
-      } catch (err) {
-        console.log(`[Validation] Could not fetch ${rule.targetObject} properties:`, err.message);
-      }
-      
-      // Validate each mapping in the rule
-      for (const mapping of rule.mappings) {
-        const sourceProp = sourceProperties.find(p => p.name === mapping.source);
-        const targetProp = targetProperties.find(p => p.name === mapping.target);
-        
-        if (!sourceProp || !targetProp) {
-          validationErrors.push({
-            rule: rule.name,
-            mapping: `${mapping.source} → ${mapping.target}`,
-            error: 'Property not found'
-          });
-          continue;
+      if (srcProp && tgtProp && window.validateMappingUI) {
+        // Create feedback element if it doesn't exist
+        let feedback = div.querySelector('.mapping-validation');
+        if (!feedback) {
+          feedback = document.createElement('div');
+          feedback.className = 'mapping-validation';
+          div.appendChild(feedback);
         }
         
-        // Validate field type compatibility
-        const validation = validateMapping(
-          {
-            name: sourceProp.name,
-            label: sourceProp.label,
-            type: sourceProp.type,
-            options: sourceProp.options || []
-          },
-          {
-            name: targetProp.name,
-            label: targetProp.label,
-            type: targetProp.type,
-            options: targetProp.options || []
+        const isValid = window.validateMappingUI(srcProp, tgtProp, feedback);
+        div.classList.toggle('invalid', !isValid);
+        div.classList.toggle('valid', isValid);
+      }
+    });
+  }
+
+  function saveRule() {
+    const name           = document.getElementById('ruleName').value.trim();
+    const sourceObject   = document.getElementById('sourceObject').value;
+    const targetObject   = document.getElementById('targetObject').value;
+    const assocRule      = document.getElementById('assocRule').value;
+    const assocLabel     = document.getElementById('assocLabel').value.trim();
+    const direction      = document.getElementById('syncDirection').value;
+    const skipIfHasValue = document.getElementById('skipIfHasValue').value;
+
+    if (!sourceObject || !targetObject) {
+      showToast('Please select source and target objects', 'error');
+      return;
+    }
+
+    const rows = document.querySelectorAll('.mapping-row');
+    const mappings = [];
+    let hasInvalidMappings = false;
+
+    rows.forEach(row => {
+      const src = row.querySelector('.src-select').value;
+      const tgt = row.querySelector('.tgt-select').value;
+      
+      if (src && tgt) {
+        // Validate mapping types
+        const srcProp = sourceProps.find(p => p.name === src);
+        const tgtProp = targetProps.find(p => p.name === tgt);
+        
+        if (srcProp && tgtProp && window.areTypesCompatible) {
+          if (!window.areTypesCompatible(srcProp.type, tgtProp.type)) {
+            hasInvalidMappings = true;
+            row.classList.add('invalid');
+            return;
           }
-        );
-        
-        if (!validation.valid) {
-          validationErrors.push({
-            rule: rule.name,
-            mapping: `${sourceProp.label} → ${targetProp.label}`,
-            error: validation.error || 'Incompatible field types'
-          });
         }
         
-        if (validation.warning) {
-          validationWarnings.push({
-            rule: rule.name,
-            mapping: `${sourceProp.label} → ${targetProp.label}`,
-            warning: validation.warning
-          });
-        }
+        const srcLabel = srcProp?.label || src;
+        const tgtLabel = tgtProp?.label || tgt;
+        mappings.push({ source: src, target: tgt, sourceLabel: srcLabel, targetLabel: tgtLabel });
       }
-    }
-    
-    // If there are validation errors, reject the save
-    if (validationErrors.length > 0) {
-      console.log(`[Settings] Validation failed for portal ${portalId}:`, validationErrors);
-      return res.status(400).json({
-        error: 'Field type validation failed',
-        validationErrors,
-        validationWarnings
-      });
-    }
-    
-    // If only warnings (no errors), save but return warnings
-    if (validationWarnings.length > 0) {
-      console.log(`[Settings] Validation warnings for portal ${portalId}:`, validationWarnings);
-    }
-    
-    await saveRules(portalId, rules || []);
-    console.log(`[Settings] Saved ${rules?.length || 0} rules for portal ${portalId}`);
-    res.json({ 
-      ok: true,
-      validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined
-    });
-    
-  } catch (err) {
-    console.error('[Settings] Error saving rules:', err.message);
-    // Fall back to saving without validation if validation fails
-    await saveRules(portalId, rules || []);
-    res.json({ 
-      ok: true,
-      warning: 'Rules saved but validation could not be performed'
-    });
-  }
-});
-
-// GET /settings/objects — test each object type and return only accessible ones
-router.get('/objects', async (req, res) => {
-  const { portalId, refresh } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-
-  // Prevent browser caching of portal-specific data
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-
-  // Check cache first
-  const cacheKey   = `objects-${portalId}`;
-  const cached     = objectsCache.get(cacheKey);
-  if (cached && !refresh && Date.now() - cached.ts < CACHE_TTL_MS) {
-    console.log(`[Settings] Returning cached objects for portal ${portalId}`);
-    return res.json({ objects: cached.objects, source: 'cache' });
-  }
-
-  try {
-    const axios      = require('axios');
-    const tokenStore = require('../services/tokenStore');
-    const tokens     = await tokenStore.get(portalId);
-
-    if (!tokens?.access_token) {
-      return res.json({ objects: OBJECTS_TO_TEST.slice(0, 5), source: 'fallback' });
-    }
-
-    const accessToken = tokens.access_token;
-
-    // First, fetch custom object schemas to get correct objectTypeId for projects
-    let projectsObjectTypeId = 'projects'; // fallback
-    try {
-      console.log('[Settings] Attempting to fetch schemas from /crm/v3/schemas...');
-      console.log('[Settings] Using access token:', accessToken ? `${accessToken.substring(0, 20)}...` : 'MISSING');
-      
-      const schemasRes = await axios.get(
-        'https://api-eu1.hubapi.com/crm/v3/schemas',
-        { 
-          headers: { Authorization: `Bearer ${accessToken}` }, 
-          timeout: 10000  // Increased timeout
-        }
-      );
-      
-      console.log('[Settings] Schemas API response status:', schemasRes.status);
-      console.log('[Settings] Schemas API returned:', schemasRes.data?.results?.length || 0, 'schemas');
-      console.log('[Settings] All schemas:', JSON.stringify(schemasRes.data?.results || [], null, 2));
-      
-      const projectSchema = (schemasRes.data?.results || []).find(s => 
-        s.name?.toLowerCase() === 'projects' || 
-        s.labels?.singular?.toLowerCase() === 'project'
-      );
-      
-      if (projectSchema) {
-        projectsObjectTypeId = projectSchema.objectTypeId || projectSchema.name;
-        console.log(`[Settings] ✅ Found Projects with objectTypeId: ${projectsObjectTypeId}`);
-      } else {
-        console.log('[Settings] ⚠️ Projects not found in schemas API response');
-      }
-    } catch (err) {
-      console.error('[Settings] ❌ Schemas API error:', err.message);
-      console.error('[Settings] Error details:', err.response?.status, err.response?.data);
-      console.error('[Settings] This means the OAuth token likely does not have crm.schemas.* scopes');
-    }
-
-    // Update OBJECTS_TO_TEST to include correct Projects objectTypeId
-    const objectsToTest = OBJECTS_TO_TEST.map(obj => {
-      if (obj.name === 'projects') {
-        return { ...obj, objectTypeId: projectsObjectTypeId };
-      }
-      return obj;
     });
 
-    // Test each object type in parallel by trying to fetch 1 property
-    const testObject = async (obj) => {
-      try {
-        const res = await axios.get(
-          `https://api-eu1.hubapi.com/crm/v3/properties/${obj.name}?limit=1`,
-          {
-            headers:        { Authorization: `Bearer ${accessToken}` },
-            timeout:        5000,
-            validateStatus: (s) => s < 500 // Don't throw on 4xx
-          }
-        );
-        if (res.status === 200) {
-          return { 
-            name: obj.name,
-            objectTypeId: obj.objectTypeId || obj.name, // Use objectTypeId if available, else name
-            label: obj.label,
-            accessible: true 
-          };
-        }
-        console.log(`[Settings] ${obj.name} not accessible (${res.status})`);
-        return null;
-      } catch (err) {
-        console.log(`[Settings] ${obj.name} test failed:`, err.message);
-        return null;
-      }
+    // Check for invalid mappings
+    if (hasInvalidMappings) {
+      showToast('❌ Some mappings have incompatible field types', 'error');
+      return;
+    }
+
+    if (mappings.length === 0) {
+      showToast('Add at least one property mapping', 'error');
+      return;
+    }
+
+    const rule = {
+      id:           editingId || Date.now().toString(),
+      name:         name || sourceObject + ' → ' + targetObject,
+      sourceObject, targetObject, assocRule, assocLabel,
+      direction,    skipIfHasValue, mappings,
+      enabled:      editingId ? rules.find(r => r.id === editingId)?.enabled ?? true : true,
+      createdAt:    editingId ? rules.find(r => r.id === editingId)?.createdAt : new Date().toISOString()
     };
 
-    // Test all objects in parallel with concurrency limit
-    const BATCH_SIZE = 5;
-    const accessible = [];
-
-    for (let i = 0; i < objectsToTest.length; i += BATCH_SIZE) {
-      const batch   = objectsToTest.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(batch.map(testObject));
-      accessible.push(...results.filter(Boolean));
+    if (editingId) {
+      rules = rules.map(r => r.id === editingId ? rule : r);
+    } else {
+      rules.push(rule);
     }
 
-    console.log(`[Settings] Portal ${portalId} has access to ${accessible.length} object types`);
+    saveRules();
+    render();
+    closeModal();
 
-    // Cache result
-    objectsCache.set(cacheKey, { objects: accessible, ts: Date.now() });
-
-    res.json({ objects: accessible, source: 'dynamic' });
-
-  } catch (err) {
-    console.error('[Settings] Objects error:', err.message);
-    res.json({ objects: OBJECTS_TO_TEST.slice(0, 5), source: 'fallback' });
-  }
-});
-
-// GET /settings/properties/:objectType - NOW WITH FULL TYPE INFO
-router.get('/properties/:objectType', async (req, res) => {
-  const { objectType } = req.params;
-  const { portalId }   = req.query;
-
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId', properties: [] });
-
-  try {
-    const client = await getClient(portalId);
-
-    let properties = [];
-
-    try {
-      const response = await client.crm.properties.coreApi.getAll(objectType);
-      properties = (response.results || [])
-        .filter(p => !p.hidden && !p.calculated)
-        .sort((a, b) => a.label.localeCompare(b.label))
-        .map(p => ({
-          name: p.name,
-          label: p.label,
-          type: p.type,              // string, number, enumeration, bool, date, datetime
-          fieldType: p.fieldType,    // text, textarea, select, number, date, etc.
-          options: p.options || []   // For dropdowns/enumerations
-        }));
-    } catch (crmErr) {
-      // Fallback to axios for non-standard objects
-      const axios      = require('axios');
-      const tokenStore = require('../services/tokenStore');
-      const tokens     = await tokenStore.get(portalId);
-
-      if (tokens?.access_token) {
-        const propsRes = await axios.get(
-          `https://api-eu1.hubapi.com/crm/v3/properties/${objectType}`,
-          { headers: { Authorization: `Bearer ${tokens.access_token}` } }
-        );
-        properties = (propsRes.data?.results || [])
-          .filter(p => !p.hidden && !p.calculated)
-          .sort((a, b) => a.label.localeCompare(b.label))
-          .map(p => ({
-            name: p.name,
-            label: p.label,
-            type: p.type,
-            fieldType: p.fieldType,
-            options: p.options || []
-          }));
-      }
-    }
-
-    res.json({ properties });
-
-  } catch (err) {
-    console.error('[Settings] Properties error for', objectType, ':', err.message);
-    if (err.message.includes('not installed') || err.message.includes('token')) {
-      return res.status(401).json({
-        error: 'App not connected. Please reinstall.',
-        reinstallUrl: `${process.env.APP_BASE_URL}/oauth/install`,
-        properties: []
-      });
-    }
-    res.status(500).json({ error: err.message, properties: [] });
-  }
-});
-
-// NEW ENDPOINT: Validate a single mapping
-router.post('/validate-mapping', async (req, res) => {
-  const { portalId, sourceObject, targetObject, sourceProperty, targetProperty } = req.body;
-  
-  if (!portalId || !sourceObject || !targetObject || !sourceProperty || !targetProperty) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  
-  try {
-    const client = await getClient(portalId);
-    
-    // Fetch source and target properties
-    const sourceRes = await client.crm.properties.coreApi.getAll(sourceObject);
-    const targetRes = await client.crm.properties.coreApi.getAll(targetObject);
-    
-    const sourceProp = (sourceRes.results || []).find(p => p.name === sourceProperty);
-    const targetProp = (targetRes.results || []).find(p => p.name === targetProperty);
-    
-    if (!sourceProp || !targetProp) {
-      return res.json({ 
-        valid: false, 
-        error: 'Property not found' 
-      });
-    }
-    
-    // Validate the mapping
-    const validation = validateMapping(
-      {
-        name: sourceProp.name,
-        label: sourceProp.label,
-        type: sourceProp.type,
-        options: sourceProp.options || []
-      },
-      {
-        name: targetProp.name,
-        label: targetProp.label,
-        type: targetProp.type,
-        options: targetProp.options || []
-      }
-    );
-    
-    res.json(validation);
-    
-  } catch (err) {
-    console.error('[Validation] Error:', err.message);
-    res.status(500).json({ 
-      valid: false, 
-      error: 'Validation failed: ' + err.message 
-    });
-  }
-});
-
-// GET /settings/sync-webhooks
-router.get('/sync-webhooks', async (req, res) => {
-  try {
-    const webhookManager = require('../services/webhookManager');
-    const tokenStore     = require('../services/tokenStore');
-    const allTokens      = await tokenStore.getAll();
-    const allRules       = {};
-    for (const pid of Object.keys(allTokens)) {
-      allRules[pid] = await getRules(pid);
-    }
-    await webhookManager.syncSubscriptions(allRules);
-    res.json({ ok: true, portals: Object.keys(allTokens), message: 'Webhook subscriptions synced!' });
-  } catch (err) {
-    console.error('[Settings] Webhook sync error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /settings/rules/sync-webhooks
-router.post('/rules/sync-webhooks', async (req, res) => {
-  try {
-    const webhookManager = require('../services/webhookManager');
-    const tokenStore     = require('../services/tokenStore');
-    const allTokens      = await tokenStore.getAll();
-    const allRules       = {};
-    for (const portalId of Object.keys(allTokens)) {
-      allRules[portalId] = await getRules(portalId);
-    }
-    await webhookManager.syncSubscriptions(allRules);
-    res.json({ ok: true, message: 'Webhook subscriptions synced' });
-  } catch (err) {
-    console.error('[Settings] Webhook sync error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /settings/test-object-access - Test if we can write to a specific object
-router.get('/test-object-access', async (req, res) => {
-  const { portalId, objectType } = req.query;
-  
-  if (!portalId || !objectType) {
-    return res.status(400).json({ error: 'Missing portalId or objectType' });
-  }
-
-  try {
-    const client = await getClient(portalId);
-    
-    // Custom objects that commonly have write restrictions
-    const customObjects = ['projects', 'courses', 'listings', 'services', 'invoices', 'orders', 'goals'];
-    const isCustom = customObjects.includes(objectType.toLowerCase());
-    
-    // Try to fetch records to test read access
-    try {
-      await client.crm.objects.basicApi.getPage(objectType, 1);
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    })
+    .then(async r => {
+      const data = await r.json();
       
-      // We can read - but can we write?
-      // For custom objects on Pro plans, read works but write often doesn't
-      res.json({
-        objectType,
-        canRead: true,
-        canWrite: !isCustom, // Assume standard objects are fully writable
-        isCustom,
-        warning: isCustom ? 'Custom objects may have limited write access on Sales Hub Pro' : null,
-        recommendation: isCustom ? 'Consider one-way sync rules (read-only from this object)' : null
-      });
+      // Check if response is error (status 400+)
+      if (!r.ok) {
+        // Backend returned an error
+        if (data.message) {
+          // Tier limit error with detailed message
+          alert(data.message);
+          showToast('❌ ' + data.error, 'error');
+        } else if (data.error) {
+          showToast('❌ ' + data.error, 'error');
+        } else {
+          showToast('❌ Failed to save rule', 'error');
+        }
+        
+        // Revert the rule addition/update
+        location.reload();
+        return;
+      }
       
-    } catch (err) {
-      if (err.message && (err.message.includes('credentials') || err.message.includes('auth') || err.message.includes('not found'))) {
-        res.json({
-          objectType,
-          canRead: false,
-          canWrite: false,
-          error: 'No API access to this object',
-          recommendation: 'This object may require Enterprise plan or may not exist'
-        });
+      // Success case
+      if (data.validationErrors) {
+        // Server found validation errors
+        showToast('❌ ' + data.validationErrors[0].error, 'error');
+      } else if (data.validationWarnings) {
+        // Server found warnings but saved
+        showToast('⚠️ Saved with warnings: ' + data.validationWarnings[0].warning, '');
       } else {
-        throw err;
+        showToast(editingId ? '✓ Rule updated' : '✓ Rule saved', 'success');
       }
-    }
-
-  } catch (err) {
-    console.error('[Settings] Error testing object access:', err.message);
-    res.status(500).json({ 
-      error: err.message,
-      canRead: false,
-      canWrite: false
+    })
+    .catch(() => {
+      showToast('❌ Network error - please try again', 'error');
     });
   }
-});
 
-module.exports = router;
-module.exports.getRules = getRules;
+  function saveRules() {
+    localStorage.setItem(storageKey, JSON.stringify(rules));
+  }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'toast ' + (type || '');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  // Load rules from server
+  fetch('/settings/rules?portalId=' + portalId)
+    .then(r => r.json())
+    .then(data => {
+      // ALWAYS update rules from server, even if empty array
+      rules = data.rules || [];
+      saveRules();
+      render();
+    })
+    .catch(() => render());
+
+  // Load notifications
+  loadNotifications();
+  
+  // Load available objects (including correct Projects object type ID)
+  loadAvailableObjects();
+  
+  // Load error count (with error handling to prevent crashes)
+  loadErrors().catch(err => console.log('Error loading errors:', err));
+  
+  // Auto-refresh errors every 30 seconds if error log is visible
+  setInterval(() => {
+    if (document.getElementById('errorLog').style.display !== 'none') {
+      loadErrors().catch(err => console.log('Error loading errors:', err));
+    } else {
+      // Just update the count
+      fetch('/settings/errors?portalId=' + portalId)
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('statErrors').textContent = (data.errors || []).length;
+        })
+        .catch(() => {});
+    }
+
+  // ========== PAYSTACK UPGRADE FUNCTIONS ==========
+  
+  // Upgrade to PayStack plan
+  async function upgradeToPlan(plan) {
+    const email = prompt('Enter your email address for billing:');
+    
+    if (!email || !email.includes('@')) {
+      showToast('Please enter a valid email address', 'error');
+      return;
+    }
+
+    try {
+      showToast('Creating checkout session...', 'info');
+
+      const response = await fetch('/paystack/create-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portalId: portalId,
+          email: email,
+          plan: plan
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        showToast('Error: ' + (data.error || 'Failed to create checkout session'), 'error');
+      }
+    } catch (err) {
+      console.error('[Upgrade] Error:', err);
+      showToast('Error: ' + err.message, 'error');
+    }
+  }
+
+  // Check tier and show/hide upgrade section
+  let currentTier = null;
+  
+  async function checkTierAndShowUpgrade() {
+    try {
+      const response = await fetch('/settings/tier?portalId=' + portalId);
+      const data = await response.json();
+
+      const tier = data.tier || 'trial';
+      const tierName = tier.toUpperCase();
+      
+      // Detect tier change
+      if (currentTier !== null && currentTier !== tier) {
+        // Tier changed! Show notification and reload
+        const tierNames = {
+          free: 'Free',
+          trial: 'Trial',
+          starter: 'Starter',
+          pro: 'Pro',
+          business: 'Business'
+        };
+        
+        showToast(`✨ Your plan has been updated to ${tierNames[tier]}!`, 'success');
+        
+        // Reload rules to update limits
+        setTimeout(() => {
+          loadRules();
+        }, 1000);
+      }
+      
+      currentTier = tier;
+      
+      document.getElementById('currentTierName').textContent = tierName;
+      
+      const limits = {
+        free: 999999,  // Unlimited (backend only)
+        trial: 30,
+        starter: 10,
+        pro: 30,
+        business: 100
+      };
+      document.getElementById('currentMappingLimit').textContent = limits[tier] || 30;
+
+      // Show upgrade section for TRIAL tier only (FREE is backend only)
+      if (tier === 'trial') {
+        document.getElementById('upgradeSection').style.display = 'block';
+      } else {
+        document.getElementById('upgradeSection').style.display = 'none';
+      }
+
+    } catch (err) {
+      console.error('[Upgrade] Failed to check tier:', err);
+    }
+  }
+
+  // Start periodic tier checking (every 30 seconds)
+  function startTierMonitoring() {
+    // Check immediately on load
+    checkTierAndShowUpgrade();
+    
+    // Then check every 30 seconds
+    setInterval(() => {
+      checkTierAndShowUpgrade();
+    }, 30000); // 30 seconds
+  }
+
+  // Call on page load
+  loadRules();
+  startTierMonitoring();
+</script>
+</body>
+</html>
