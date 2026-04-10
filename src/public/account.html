@@ -165,11 +165,10 @@
   document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
 
   const TIERS = {
-    trial:    { name: 'Free Trial',  price: 0,  maxRules: 10,  maxMappings: 10,  desc: '14-day free trial' },
-    starter:  { name: 'Starter',     price: 7,  maxRules: 10,  maxMappings: 10,  desc: 'Perfect for small teams' },
-    growth:   { name: 'Growth',      price: 12, maxRules: 30,  maxMappings: 30,  desc: 'For growing businesses' },
-    pro:      { name: 'Pro',         price: 16, maxRules: 50,  maxMappings: 50,  desc: 'For power users' },
-    business: { name: 'Business',    price: 25, maxRules: 100, maxMappings: 100, desc: 'For agencies & enterprise' }
+    trial:    { name: 'Free Trial',  price: 0,     maxMappings: 30,  desc: '30-day free trial' },
+    starter:  { name: 'Starter',     price: 85,    maxMappings: 10,  desc: 'Perfect for small teams' },
+    pro:      { name: 'Pro',         price: 510,   maxMappings: 30,  desc: 'For growing businesses' },
+    business: { name: 'Business',    price: 850,   maxMappings: 100, desc: 'For agencies & enterprise' }
   };
 
   let currentTier = 'trial';
@@ -238,19 +237,18 @@
 
       // Usage bars
       const rulesUsed  = currentUsage.rules;
-      const maxRules   = tierInfo.maxRules || 10;
-      const maxMapp    = tierInfo.maxMappings || 10;
-      const rulesPct   = Math.min(100, (rulesUsed / maxRules) * 100);
-      const mappPct    = Math.min(100, (currentUsage.maxMappingsPerRule / maxMapp) * 100);
+      const maxMapp    = tierInfo.maxMappings || 30;
+      const totalMappings = currentUsage.mappings || 0;
+      const mappPct    = Math.min(100, (totalMappings / maxMapp) * 100);
 
       document.getElementById('usageBars').innerHTML = `
         <div class="usage-item">
-          <label><span>Sync Rules Used</span><span>${rulesUsed} / ${maxRules}</span></label>
-          <div class="progress"><div class="progress-fill ${rulesPct >= 100 ? 'danger' : rulesPct >= 80 ? 'warning' : ''}" style="width:${rulesPct}%"></div></div>
+          <label><span>Property Mappings Used</span><span>${totalMappings} / ${maxMapp}</span></label>
+          <div class="progress"><div class="progress-fill ${mappPct >= 100 ? 'danger' : mappPct >= 80 ? 'warning' : ''}" style="width:${mappPct}%"></div></div>
         </div>
         <div class="usage-item">
-          <label><span>Max Mappings in a Rule</span><span>${currentUsage.maxMappingsPerRule} / ${maxMapp}</span></label>
-          <div class="progress"><div class="progress-fill ${mappPct >= 100 ? 'danger' : mappPct >= 80 ? 'warning' : ''}" style="width:${mappPct}%"></div></div>
+          <label><span>Sync Rules Created</span><span>${rulesUsed} (Unlimited)</span></label>
+          <div class="progress"><div class="progress-fill" style="width:0%"></div></div>
         </div>
       `;
 
@@ -263,19 +261,19 @@
   }
 
   function renderTiers() {
-    const tierOrder = ['starter', 'growth', 'pro', 'business'];
+    const tierOrder = ['starter', 'pro', 'business'];
     document.getElementById('tiersGrid').innerHTML = tierOrder.map(t => {
       const info      = TIERS[t];
       const isCurrent = currentTier === t || (currentTier === 'trial' && t === 'starter');
-      const isPopular = t === 'growth';
+      const isPopular = t === 'pro';
       const isUpgrade = info.price > (TIERS[currentTier]?.price || 0);
       const btnClass  = isCurrent ? 'current-plan' : isUpgrade ? 'primary' : 'downgrade';
       const btnLabel  = isCurrent ? 'Current Plan' : isUpgrade ? '↑ Upgrade' : '↓ Downgrade';
 
       // Check if downgrade is blocked
+      const totalMappings = currentUsage.mappings || 0;
       const wouldBlock = !isCurrent && !isUpgrade && (
-        currentUsage.rules > info.maxRules ||
-        currentUsage.maxMappingsPerRule > info.maxMappings
+        totalMappings > info.maxMappings
       );
 
       return `
@@ -283,11 +281,11 @@
           ${isCurrent ? '<div class="current-badge">Current Plan</div>' : ''}
           ${isPopular && !isCurrent ? '<div class="popular-badge">Most Popular</div>' : ''}
           <div class="tier-name">${info.name}</div>
-          <div class="tier-price">$${info.price}</div>
+          <div class="tier-price">R${info.price}</div>
           <div class="tier-period">per month</div>
           <ul class="tier-features">
-            <li>${info.maxRules} sync rules</li>
-            <li>${info.maxMappings} mappings per rule</li>
+            <li>${info.maxMappings} property mappings</li>
+            <li>Unlimited sync rules</li>
             <li>Real-time webhook sync</li>
             <li>All object types</li>
           </ul>
@@ -315,9 +313,9 @@
     document.getElementById('changeSummary').innerHTML = `
       <div class="change-row"><span class="change-label">From</span><span class="change-value">${curInfo.name} ($${curInfo.price}/mo)</span></div>
       <div class="change-row"><span class="change-label">To</span><span class="change-value">${newInfo.name} ($${newInfo.price}/mo)</span></div>
-      <div class="change-row"><span class="change-label">Sync Rules</span><span class="change-value">${curInfo.maxRules} → ${newInfo.maxRules}</span></div>
-      <div class="change-row"><span class="change-label">Mappings per Rule</span><span class="change-value">${curInfo.maxMappings} → ${newInfo.maxMappings}</span></div>
-      <div class="change-row"><span class="change-label">Your Current Usage</span><span class="change-value">${currentUsage.rules} rules / ${currentUsage.maxMappingsPerRule} max mappings</span></div>
+      <div class="change-row"><span class="change-label">Property Mappings</span><span class="change-value">${curInfo.maxMappings} → ${newInfo.maxMappings}</span></div>
+      <div class="change-row"><span class="change-label">Sync Rules</span><span class="change-value">Unlimited → Unlimited</span></div>
+      <div class="change-row"><span class="change-label">Your Current Usage</span><span class="change-value">${currentUsage.mappings || 0} property mappings</span></div>
     `;
 
     document.getElementById('modalOverlay').classList.add('open');
