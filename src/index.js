@@ -38,7 +38,7 @@ const PORT = process.env.PORT || 3000;
 const BASE = process.env.APP_BASE_URL || ('https://' + process.env.RAILWAY_PUBLIC_DOMAIN) || 'http://localhost:' + PORT;
 
 app.listen(PORT, () => {
-  console.log(`🚀  SyncStation V2 running on port ${PORT}`);
+  console.log(`🚀  SyncStation running on port ${PORT}`);
   console.log(`    Install URL:   ${BASE}/oauth/install`);
   console.log(`    Settings URL:  ${BASE}/settings`);
   console.log(`    Account URL:   ${BASE}/account`);
