@@ -847,8 +847,8 @@
         <div>
           <h3 style="margin: 0 0 4px 0; font-size: 18px;">Upgrade Your Plan</h3>
           <p style="margin: 0; color: var(--muted); font-size: 14px;">
-            Current: <span id="currentTierName" style="color: var(--accent); font-weight: 500;">FREE</span> 
-            · <span id="currentRuleLimit">30</span> mapping rules
+            Current: <span id="currentTierName" style="color: var(--accent); font-weight: 500;">TRIAL</span> 
+            · <span id="currentMappingLimit">30</span> property mappings
           </p>
         </div>
       </div>
@@ -865,7 +865,8 @@
             </div>
           </div>
           <ul class="plan-features">
-            <li>100 mapping rules</li>
+            <li>10 property mappings</li>
+            <li>Unlimited sync rules</li>
             <li>All object types</li>
             <li>Webhook triggers</li>
             <li>Email support</li>
@@ -887,7 +888,8 @@
             </div>
           </div>
           <ul class="plan-features">
-            <li>500 mapping rules</li>
+            <li>30 property mappings</li>
+            <li>Unlimited sync rules</li>
             <li>All object types</li>
             <li>Webhook triggers</li>
             <li>Priority support</li>
@@ -909,7 +911,8 @@
             </div>
           </div>
           <ul class="plan-features">
-            <li>Unlimited mapping rules</li>
+            <li>100 property mappings</li>
+            <li>Unlimited sync rules</li>
             <li>All object types</li>
             <li>Webhook triggers</li>
             <li>Dedicated support</li>
@@ -1012,7 +1015,7 @@
         <span class="loading" id="propsStatus"></span>
       </div>
       <div class="mappings-list" id="mappingsList"></div>
-      <button class="btn-add-mapping" onclick="addMappingRow()">+ Add property mapping</button>
+      <button class="btn-add-mapping" onclick="checkAndAddMapping()">+ Add property mapping</button>
     </div>
 
     <div class="modal-footer">
@@ -1366,6 +1369,67 @@
     });
   }
 
+  // Check if user can add more property mappings
+  async function canAddMapping() {
+    try {
+      const response = await fetch('/settings/tier?portalId=' + portalId);
+      const data = await response.json();
+      
+      const tier = data.tier || 'trial';
+      const limits = {
+        free: 999999,
+        trial: 30,
+        starter: 10,
+        pro: 30,
+        business: 100
+      };
+      
+      const tierLimit = limits[tier];
+      
+      // Count total mappings across ALL rules
+      const totalMappings = rules.reduce((sum, rule) => {
+        return sum + (rule.mappings?.length || 0);
+      }, 0);
+      
+      // Count mappings currently in the modal
+      const modalMappings = document.querySelectorAll('#mappingsList .mapping-row').length;
+      
+      if (totalMappings + modalMappings >= tierLimit) {
+        return {
+          allowed: false,
+          tier: tier,
+          limit: tierLimit,
+          current: totalMappings
+        };
+      }
+      
+      return { allowed: true };
+    } catch (err) {
+      console.error('[Mapping Limit] Error checking:', err);
+      return { allowed: true };  // Allow on error to not block users
+    }
+  }
+
+  async function checkAndAddMapping() {
+    const check = await canAddMapping();
+    
+    if (!check.allowed) {
+      // Show upgrade prompt
+      const tierNames = {
+        trial: 'Trial',
+        starter: 'Starter',
+        pro: 'Pro',
+        business: 'Business'
+      };
+      
+      alert(`You've reached your limit of ${check.limit} property mappings on the ${tierNames[check.tier]} plan.\n\nUpgrade to add more mappings:\n• Starter: 10 mappings (R85/mo)\n• Pro: 30 mappings (R510/mo)\n• Business: 100 mappings (R850/mo)\n\nGo to Settings to upgrade.`);
+      return;
+    }
+    
+    // Allowed - add the mapping
+    addMappingRow();
+  }
+
   function addMappingRow(srcVal, tgtVal) {
     const list = document.getElementById('mappingsList');
     const div  = document.createElement('div');
@@ -1598,21 +1662,22 @@
       const response = await fetch('/settings/tier?portalId=' + portalId);
       const data = await response.json();
 
-      const tier = data.tier || 'free';
+      const tier = data.tier || 'trial';
       const tierName = tier.toUpperCase();
       
       document.getElementById('currentTierName').textContent = tierName;
       
       const limits = {
-        free: 30,
+        free: 999999,  // Unlimited (backend only)
         trial: 30,
-        starter: 100,
-        pro: 500,
-        business: 'Unlimited'
+        starter: 10,
+        pro: 30,
+        business: 100
       };
-      document.getElementById('currentRuleLimit').textContent = limits[tier] || 30;
+      document.getElementById('currentMappingLimit').textContent = limits[tier] || 30;
 
-      if (tier === 'free' || tier === 'trial') {
+      // Show upgrade section for TRIAL tier only (FREE is backend only)
+      if (tier === 'trial') {
         document.getElementById('upgradeSection').style.display = 'block';
       } else {
         document.getElementById('upgradeSection').style.display = 'none';
