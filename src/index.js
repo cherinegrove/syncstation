@@ -22,12 +22,12 @@ app.use('/paystack',      require('./routes/paystack'));
 // Root landing page
 app.get('/', (req, res) => {
   res.send(`
-    <html><head><title>PropBridge</title>
+    <html><head><title>SyncStation</title>
     <style>body{font-family:sans-serif;max-width:600px;margin:80px auto;text-align:center;color:#333}h1{font-size:36px;margin-bottom:8px}p{color:#666;margin-bottom:32px}a{background:#ff6b35;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:500}</style>
     </head><body>
-    <h1>⇄ PropBridge</h1>
+    <h1>⇄ SyncStation</h1>
     <p>Sync property values between associated HubSpot CRM objects.</p>
-    <a href="/oauth/install">Install PropBridge</a>
+    <a href="/oauth/install">Install SyncStation</a>
     </body></html>
   `);
 });
@@ -38,7 +38,7 @@ const PORT = process.env.PORT || 3000;
 const BASE = process.env.APP_BASE_URL || ('https://' + process.env.RAILWAY_PUBLIC_DOMAIN) || 'http://localhost:' + PORT;
 
 app.listen(PORT, () => {
-  console.log(`🚀  PropBridge V2 running on port ${PORT}`);
+  console.log(`🚀  SyncStation V2 running on port ${PORT}`);
   console.log(`    Install URL:   ${BASE}/oauth/install`);
   console.log(`    Settings URL:  ${BASE}/settings`);
   console.log(`    Account URL:   ${BASE}/account`);
