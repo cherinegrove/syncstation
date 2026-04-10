@@ -1657,6 +1657,8 @@
   }
 
   // Check tier and show/hide upgrade section
+  let currentTier = null;
+  
   async function checkTierAndShowUpgrade() {
     try {
       const response = await fetch('/settings/tier?portalId=' + portalId);
@@ -1664,6 +1666,27 @@
 
       const tier = data.tier || 'trial';
       const tierName = tier.toUpperCase();
+      
+      // Detect tier change
+      if (currentTier !== null && currentTier !== tier) {
+        // Tier changed! Show notification and reload
+        const tierNames = {
+          free: 'Free',
+          trial: 'Trial',
+          starter: 'Starter',
+          pro: 'Pro',
+          business: 'Business'
+        };
+        
+        showToast(`✨ Your plan has been updated to ${tierNames[tier]}!`, 'success');
+        
+        // Reload rules to update limits
+        setTimeout(() => {
+          loadRules();
+        }, 1000);
+      }
+      
+      currentTier = tier;
       
       document.getElementById('currentTierName').textContent = tierName;
       
@@ -1688,9 +1711,20 @@
     }
   }
 
+  // Start periodic tier checking (every 30 seconds)
+  function startTierMonitoring() {
+    // Check immediately on load
+    checkTierAndShowUpgrade();
+    
+    // Then check every 30 seconds
+    setInterval(() => {
+      checkTierAndShowUpgrade();
+    }, 30000); // 30 seconds
+  }
+
   // Call on page load
   loadRules();
-  checkTierAndShowUpgrade();
+  startTierMonitoring();
 </script>
 </body>
 </html>
