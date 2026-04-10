@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PropBridge — Account</title>
+<title>SyncStation — Account</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -109,7 +109,7 @@
 <body>
 
 <div class="header">
-  <div class="logo"><div class="logo-icon">⇄</div>PropBridge</div>
+  <div class="logo"><div class="logo-icon">⇄</div>SyncStation</div>
   <nav class="header-nav">
     <a id="navSettings" href="#">Sync Rules</a>
     <a id="navAccount" href="#" class="active">Account</a>
@@ -119,7 +119,7 @@
 
 <div class="main">
   <div class="page-title">Account & Billing</div>
-  <div class="page-subtitle">Manage your PropBridge subscription.</div>
+  <div class="page-subtitle">Manage your SyncStation subscription.</div>
 
   <div id="alertBanner"></div>
 
@@ -227,7 +227,7 @@
       // Alert banners
       const alertBanner = document.getElementById('alertBanner');
       if (isExpired) {
-        alertBanner.innerHTML = `<div class="alert-banner alert-error">⚠️ Your free trial has expired. Upgrade below to reactivate PropBridge.</div>`;
+        alertBanner.innerHTML = `<div class="alert-banner alert-error">⚠️ Your free trial has expired. Upgrade below to reactivate SyncStation.</div>`;
       } else if (currentTier === 'trial' && trialDaysLeft <= 3) {
         alertBanner.innerHTML = `<div class="alert-banner alert-warning">⏰ Trial expires in ${Math.ceil(trialDaysLeft)} day(s). Upgrade now to keep your rules active.</div>`;
       } else if (currentTier === 'suspended') {
