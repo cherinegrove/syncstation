@@ -219,7 +219,7 @@
       document.getElementById('planCard').className = 'plan-card ' + (isExpired ? 'expired' : currentTier);
       document.getElementById('planName').textContent = isExpired ? 'Trial Expired' : tierInfo.name;
       document.getElementById('planDesc').textContent = tierInfo.desc || '';
-      document.getElementById('planPrice').textContent = currentTier === 'trial' ? 'Free' : 'R' + tierInfo.price;
+      document.getElementById('planPrice').textContent = currentTier === 'trial' ? 'Free' : '$' + tierInfo.price;
 
       // Dates
       const trialStart  = tierRes.trial_started_at;
@@ -305,13 +305,13 @@
           ${isCurrent ? '<div class="current-badge">Current Plan</div>' : ''}
           ${isPopular && !isCurrent ? '<div class="popular-badge">Most Popular</div>' : ''}
           <div class="tier-name">${info.name}</div>
-          <div class="tier-price">R${info.price}</div>
+          <div class="tier-price">$${info.price}</div>
           <div class="tier-period">per month</div>
           <ul class="tier-features">
             <li>${info.maxMappings} property mappings</li>
-            <li>Unlimited sync rules</li>
             <li>Real-time webhook sync</li>
-            <li>All object types</li>
+            <li>15-min API sync (custom objects)</li>
+            <li>Flexible field type mapping</li>
           </ul>
           ${wouldBlock
             ? `<button class="btn-upgrade" style="background:var(--surface2);color:var(--error);border:1px solid rgba(248,113,113,0.3);cursor:not-allowed" title="Reduce your usage first" disabled>⚠ Can't Downgrade</button>`
