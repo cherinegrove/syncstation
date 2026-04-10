@@ -47,7 +47,7 @@ const TIERS = {
   },
   STARTER: {
     name: 'STARTER',
-    price: 5,
+    price: 7,
     maxMappings: 10,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals'],
@@ -55,7 +55,7 @@ const TIERS = {
   },
   PRO: {
     name: 'PRO',
-    price: 30,
+    price: 15,
     maxMappings: 30,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'],
@@ -63,7 +63,7 @@ const TIERS = {
   },
   BUSINESS: {
     name: 'BUSINESS',
-    price: 50,
+    price: 25,
     maxMappings: 100,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'],
