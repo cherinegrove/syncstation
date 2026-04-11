@@ -1,21 +1,30 @@
 {
-  "name": "hubspot-property-sync-app",
+  "name": "syncstation",
   "version": "1.0.0",
-  "description": "SyncStation - Sync property values between HubSpot CRM objects",
-  "main": "src/index.js",
+  "description": "SyncStation - Unified payment sync platform",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "register-action": "node scripts/registerAction.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "create-admin": "node create-admin.js"
   },
+  "keywords": ["payments", "sync", "stripe", "paystack"],
+  "author": "SyncStation",
+  "license": "ISC",
   "dependencies": {
-    "@hubspot/api-client": "^11.0.0",
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
     "axios": "^1.6.0",
-    "dotenv": "^16.0.0",
-    "express": "^4.18.0",
-    "pg": "^8.11.0"
+    "stripe": "^14.0.0",
+    "express-session": "^1.17.3",
+    "bcrypt": "^5.1.1",
+    "connect-pg-simple": "^9.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.0"
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
