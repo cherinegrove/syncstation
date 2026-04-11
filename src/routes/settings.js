@@ -169,7 +169,7 @@ router.post('/rules', async (req, res) => {
       
       return res.status(400).json({ 
         error: `Mapping limit exceeded`,
-        message: `You have ${totalMappings} property mappings but your ${tierNames[tier]} plan allows ${limit}.\n\nPlease remove ${totalMappings - limit} mapping(s) or upgrade your plan.`,
+        message: `You've reached your limit of ${limit} property mappings on the ${tierNames[tier]} plan.\n\nPlease remove ${totalMappings - limit} mapping(s) or upgrade your plan to add more.`,
         limit: limit,
         current: totalMappings,
         tier: tier
