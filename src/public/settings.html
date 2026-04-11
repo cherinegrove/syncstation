@@ -498,6 +498,223 @@
   .toast.success { border-left: 3px solid var(--success); }
   .toast.error { border-left: 3px solid var(--error); }
 
+  /* Universal Modal System */
+  .sync-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    padding: 20px;
+  }
+
+  .sync-modal-overlay.open { display: flex; }
+
+  .sync-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    animation: syncModalSlide 0.3s ease-out;
+  }
+
+  @keyframes syncModalSlide {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .sync-modal-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .sync-modal-warning { color: #fb923c; }
+  .sync-modal-info { color: #60a5fa; }
+  .sync-modal-input { color: #a78bfa; }
+  .sync-modal-success { color: #4ade80; }
+  .sync-modal-error { color: #f87171; }
+
+  .sync-modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .sync-modal-message {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 24px;
+    white-space: pre-line;
+  }
+
+  .sync-modal-input-field {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: var(--text);
+    margin-bottom: 24px;
+    font-family: inherit;
+  }
+
+  .sync-modal-input-field:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .sync-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .sync-modal-actions .btn {
+    min-width: 120px;
+  }
+
+  /* Limit Error Modal */
+  .limit-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+  }
+
+  .limit-modal-overlay.open { display: flex; }
+
+  .limit-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    animation: slideDown 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .limit-modal-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .limit-modal-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .limit-modal-message {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+
+  .limit-modal-plans {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .limit-plan {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 16px;
+    transition: all 0.2s;
+  }
+
+  .limit-plan:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .limit-plan-highlight {
+    position: relative;
+    border: 2px solid var(--accent);
+    background: rgba(255, 107, 53, 0.05);
+  }
+
+  .limit-plan-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 10px;
+  }
+
+  .limit-plan-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .limit-plan-price {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .limit-plan-price span {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .limit-plan-mappings {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .limit-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .limit-modal-actions .btn {
+    min-width: 140px;
+  }
+
   .stats-bar {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1019,6 +1236,74 @@
   </div>
 </div>
 
+<!-- Universal Modal System -->
+<div class="sync-modal-overlay" id="syncConfirmModal">
+  <div class="sync-modal">
+    <div class="sync-modal-icon sync-modal-warning">⚠️</div>
+    <div class="sync-modal-title" id="confirmTitle">Confirm Action</div>
+    <div class="sync-modal-message" id="confirmMessage"></div>
+    <div class="sync-modal-actions">
+      <button class="btn btn-secondary" onclick="closeConfirmModal(false)">Cancel</button>
+      <button class="btn btn-primary" onclick="closeConfirmModal(true)" id="confirmBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="sync-modal-overlay" id="syncAlertModal">
+  <div class="sync-modal">
+    <div class="sync-modal-icon sync-modal-info" id="alertIcon">ℹ️</div>
+    <div class="sync-modal-title" id="alertTitle">Notice</div>
+    <div class="sync-modal-message" id="alertMessage"></div>
+    <div class="sync-modal-actions">
+      <button class="btn btn-primary" onclick="closeAlertModal()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="sync-modal-overlay" id="syncPromptModal">
+  <div class="sync-modal">
+    <div class="sync-modal-icon sync-modal-input">✏️</div>
+    <div class="sync-modal-title" id="promptTitle">Input Required</div>
+    <div class="sync-modal-message" id="promptMessage"></div>
+    <input type="text" class="sync-modal-input-field" id="promptInput" placeholder="">
+    <div class="sync-modal-actions">
+      <button class="btn btn-secondary" onclick="closePromptModal(null)">Cancel</button>
+      <button class="btn btn-primary" onclick="closePromptModal(document.getElementById('promptInput').value)">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Limit Error Modal -->
+<div class="limit-modal-overlay" id="limitModalOverlay">
+  <div class="limit-modal">
+    <div class="limit-modal-icon">⚠️</div>
+    <div class="limit-modal-title">Mapping Limit Reached</div>
+    <div class="limit-modal-message" id="limitModalMessage"></div>
+    <div class="limit-modal-plans">
+      <div class="limit-plan">
+        <div class="limit-plan-name">Starter</div>
+        <div class="limit-plan-price">$7<span>/mo</span></div>
+        <div class="limit-plan-mappings">10 mappings</div>
+      </div>
+      <div class="limit-plan limit-plan-highlight">
+        <div class="limit-plan-badge">POPULAR</div>
+        <div class="limit-plan-name">Pro</div>
+        <div class="limit-plan-price">$15<span>/mo</span></div>
+        <div class="limit-plan-mappings">30 mappings</div>
+      </div>
+      <div class="limit-plan">
+        <div class="limit-plan-name">Business</div>
+        <div class="limit-plan-price">$25<span>/mo</span></div>
+        <div class="limit-plan-mappings">100 mappings</div>
+      </div>
+    </div>
+    <div class="limit-modal-actions">
+      <button class="btn btn-secondary" onclick="closeLimitModal()">Close</button>
+      <button class="btn btn-primary" onclick="window.location.href='/account?portalId=' + portalId">Upgrade Plan</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1139,7 +1424,7 @@
   }
 
   async function clearErrors() {
-    if (!confirm('Clear all sync errors?')) return;
+    if (!await syncConfirm('Are you sure you want to clear all sync errors?', 'Clear Errors', 'Clear All')) return;
     
     try {
       await fetch('/settings/errors?portalId=' + portalId, { method: 'DELETE' });
@@ -1258,8 +1543,8 @@
     showToast(enabled ? '✓ Rule enabled' : 'Rule disabled', enabled ? 'success' : '');
   }
 
-  function deleteRule(id) {
-    if (!confirm('Delete this sync rule?')) return;
+  async function deleteRule(id) {
+    if (!await syncConfirm('This sync rule will be permanently deleted.', 'Delete Rule', 'Delete')) return;
     rules = rules.filter(r => r.id !== id);
     saveRules();
     render();
@@ -1309,6 +1594,77 @@
 
   function closeModal() {
     document.getElementById('modalOverlay').classList.remove('open');
+  }
+
+  function showLimitModal(message) {
+    document.getElementById('limitModalMessage').textContent = message;
+    document.getElementById('limitModalOverlay').classList.add('open');
+  }
+
+  function closeLimitModal() {
+    document.getElementById('limitModalOverlay').classList.remove('open');
+  }
+
+  // Universal Modal Functions
+  let confirmResolve = null;
+  let alertResolve = null;
+  let promptResolve = null;
+
+  async function syncConfirm(message, title = 'Confirm Action', confirmText = 'Confirm') {
+    return new Promise((resolve) => {
+      confirmResolve = resolve;
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmMessage').textContent = message;
+      document.getElementById('confirmBtn').textContent = confirmText;
+      document.getElementById('syncConfirmModal').classList.add('open');
+    });
+  }
+
+  function closeConfirmModal(result) {
+    document.getElementById('syncConfirmModal').classList.remove('open');
+    if (confirmResolve) {
+      confirmResolve(result);
+      confirmResolve = null;
+    }
+  }
+
+  async function syncAlert(message, title = 'Notice', icon = 'ℹ️') {
+    return new Promise((resolve) => {
+      alertResolve = resolve;
+      document.getElementById('alertTitle').textContent = title;
+      document.getElementById('alertMessage').textContent = message;
+      document.getElementById('alertIcon').textContent = icon;
+      document.getElementById('syncAlertModal').classList.add('open');
+    });
+  }
+
+  function closeAlertModal() {
+    document.getElementById('syncAlertModal').classList.remove('open');
+    if (alertResolve) {
+      alertResolve();
+      alertResolve = null;
+    }
+  }
+
+  async function syncPrompt(message, title = 'Input Required', placeholder = '', defaultValue = '') {
+    return new Promise((resolve) => {
+      promptResolve = resolve;
+      document.getElementById('promptTitle').textContent = title;
+      document.getElementById('promptMessage').textContent = message;
+      const input = document.getElementById('promptInput');
+      input.placeholder = placeholder;
+      input.value = defaultValue;
+      document.getElementById('syncPromptModal').classList.add('open');
+      setTimeout(() => input.focus(), 100);
+    });
+  }
+
+  function closePromptModal(result) {
+    document.getElementById('syncPromptModal').classList.remove('open');
+    if (promptResolve) {
+      promptResolve(result);
+      promptResolve = null;
+    }
   }
 
   function toggleLabelField() {
@@ -1554,8 +1910,7 @@
         // Backend returned an error
         if (data.message) {
           // Tier limit error with detailed message
-          alert(data.message);
-          showToast('❌ ' + data.error, 'error');
+          showLimitModal(data.message);
         } else if (data.error) {
           showToast('❌ ' + data.error, 'error');
         } else {
@@ -1599,6 +1954,30 @@
     if (e.target === this) closeModal();
   });
 
+  document.getElementById('limitModalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeLimitModal();
+  });
+
+  // Universal modal click-outside handlers
+  document.getElementById('syncConfirmModal').addEventListener('click', function(e) {
+    if (e.target === this) closeConfirmModal(false);
+  });
+
+  document.getElementById('syncAlertModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAlertModal();
+  });
+
+  document.getElementById('syncPromptModal').addEventListener('click', function(e) {
+    if (e.target === this) closePromptModal(null);
+  });
+
+  // Enter key support for prompt
+  document.getElementById('promptInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      closePromptModal(this.value);
+    }
+  });
+
   // Load rules from server
   fetch('/settings/rules?portalId=' + portalId)
     .then(r => r.json())
@@ -1638,10 +2017,14 @@
   
   // Upgrade to PayStack plan
   async function upgradeToPlan(plan) {
-    const email = prompt('Enter your email address for billing:');
+    const email = await syncPrompt(
+      'Please enter your email address for billing and payment notifications.',
+      'Upgrade to ' + plan.charAt(0).toUpperCase() + plan.slice(1),
+      'your@email.com'
+    );
     
     if (!email || !email.includes('@')) {
-      showToast('Please enter a valid email address', 'error');
+      await syncAlert('Please enter a valid email address.', 'Invalid Email', '⚠️');
       return;
     }
 
