@@ -1808,22 +1808,7 @@
     
     // When target changes, validate the mapping
     tgtSelect.addEventListener('change', function() {
-      const srcProp = sourceProps.find(p => p.name === srcSelect.value);
-      const tgtProp = targetProps.find(p => p.name === this.value);
-      
-      if (srcProp && tgtProp && window.validateMappingUI) {
-        // Create feedback element if it doesn't exist
-        let feedback = div.querySelector('.mapping-validation');
-        if (!feedback) {
-          feedback = document.createElement('div');
-          feedback.className = 'mapping-validation';
-          div.appendChild(feedback);
-        }
-        
-        const isValid = window.validateMappingUI(srcProp, tgtProp, feedback);
-        div.classList.toggle('invalid', !isValid);
-        div.classList.toggle('valid', isValid);
-      }
+      // Validation feedback disabled - no green/red messages shown
     });
   }
 
