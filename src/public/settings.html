@@ -1764,7 +1764,7 @@
     const check = await canAddMapping();
     
     if (!check.allowed) {
-      // Show upgrade prompt
+      // Show limit modal
       const tierNames = {
         trial: 'Trial',
         starter: 'Starter',
@@ -1772,7 +1772,7 @@
         business: 'Business'
       };
       
-      alert(`You've reached your limit of ${check.limit} property mappings on the ${tierNames[check.tier]} plan.\n\nUpgrade to add more mappings:\n• Starter: 10 mappings (R85/mo)\n• Pro: 30 mappings (R510/mo)\n• Business: 100 mappings (R850/mo)\n\nGo to Settings to upgrade.`);
+      showLimitModal(`You've reached your limit of ${check.limit} property mappings on the ${tierNames[check.tier]} plan.\n\nPlease remove ${check.current - check.limit} mapping(s) or upgrade your plan to add more.`);
       return;
     }
     
