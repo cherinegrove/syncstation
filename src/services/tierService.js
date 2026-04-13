@@ -19,6 +19,9 @@ function getPool() {
         paystack_customer_id TEXT,
         paystack_subscription_id TEXT,
         paystack_subscription_status TEXT,
+        paddle_customer_id TEXT,
+        paddle_subscription_id TEXT,
+        paddle_subscription_status TEXT,
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `).then(() => console.log('[Tiers] Table ready'))
