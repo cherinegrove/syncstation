@@ -297,6 +297,8 @@ Guidelines:
 
   } catch (err) {
     console.error('[Chatbot] Error:', err.message);
+    console.error('[Chatbot] Full error:', err);
+    console.error('[Chatbot] API Key present?', !!process.env.CLAUDE_API_KEY);
     res.status(500).json({ error: 'Chatbot error' });
   }
 });
