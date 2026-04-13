@@ -91,18 +91,8 @@ app.use('/api/settings', require('./src/routes/settings'));
 app.use('/api/stripe', require('./src/routes/stripe'));
 app.use('/api/webhooks', require('./src/routes/webhooks'));
 
-// Settings API routes (backward compatibility - must be before /settings page route)
-const settingsRouter = require('./src/routes/settings');
-app.use('/settings/objects', settingsRouter);
-app.use('/settings/errors', settingsRouter);
-app.use('/settings/rules', settingsRouter);
-app.use('/settings/properties', settingsRouter);
-app.use('/settings/tier', settingsRouter);
-
-// Settings page route (for portal users) - must be AFTER /settings/* API routes
-app.get('/settings', (req, res) => {
-  res.sendFile(path.join(__dirname, 'src/public/settings.html'));
-});
+// Settings API at /settings (backward compatibility)
+app.use('/settings', require('./src/routes/settings'));
 
 // Account page route (for portal users)
 app.get('/account', (req, res) => {
