@@ -86,7 +86,7 @@ app.use('/api/action', require('./src/routes/action'));
 app.use('/api/crmcard', require('./src/routes/crmcard'));
 app.use('/api/notifications', require('./src/routes/notifications'));
 app.use('/api/oauth', require('./src/routes/oauth'));
-app.use('/api/paystack', require('./src/routes/paystack'));
+app.use('/api/paddle', require('./src/routes/paddle'));
 app.use('/api/settings', require('./src/routes/settings'));
 app.use('/api/stripe', require('./src/routes/stripe'));
 app.use('/api/webhooks', require('./src/routes/webhooks'));
