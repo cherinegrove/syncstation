@@ -775,7 +775,6 @@
   
   /* Validation feedback styling within mapping rows */
   .mapping-validation {
-    display: none; /* Hidden - validation feedback not needed */
     grid-column: 1 / -1;
     font-size: 12px;
     margin-top: 4px;
@@ -1078,12 +1077,12 @@
             <h4>Starter</h4>
             <div class="plan-price">
               <span class="currency">$</span>
-              <span class="amount">7</span>
+              <span class="amount">10</span>
               <span class="period">/month</span>
             </div>
           </div>
           <ul class="plan-features">
-            <li>10 property mappings</li>
+            <li>20 property mappings</li>
             <li>Real-time webhook sync for standard objects</li>
             <li>15-min API sync for custom objects</li>
             <li>Flexible field type mapping</li>
@@ -1121,7 +1120,7 @@
             <h4>Business</h4>
             <div class="plan-price">
               <span class="currency">$</span>
-              <span class="amount">25</span>
+              <span class="amount">40</span>
               <span class="period">/month</span>
             </div>
           </div>
@@ -1808,7 +1807,22 @@
     
     // When target changes, validate the mapping
     tgtSelect.addEventListener('change', function() {
-      // Validation feedback disabled - no green/red messages shown
+      const srcProp = sourceProps.find(p => p.name === srcSelect.value);
+      const tgtProp = targetProps.find(p => p.name === this.value);
+      
+      if (srcProp && tgtProp && window.validateMappingUI) {
+        // Create feedback element if it doesn't exist
+        let feedback = div.querySelector('.mapping-validation');
+        if (!feedback) {
+          feedback = document.createElement('div');
+          feedback.className = 'mapping-validation';
+          div.appendChild(feedback);
+        }
+        
+        const isValid = window.validateMappingUI(srcProp, tgtProp, feedback);
+        div.classList.toggle('invalid', !isValid);
+        div.classList.toggle('valid', isValid);
+      }
     });
   }
 
@@ -2015,9 +2029,9 @@
     }
 
     try {
-      showToast('Creating checkout session...', 'info');
+      showToast('Creating payment session...', 'info');
 
-      const response = await fetch('/paystack/create-subscription', {
+      const response = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2029,10 +2043,11 @@
 
       const data = await response.json();
 
-      if (data.success && data.checkout_url) {
-        window.location.href = data.checkout_url;
+      if (data.success && data.authorization_url) {
+        // Redirect to PayStack checkout
+        window.location.href = data.authorization_url;
       } else {
-        showToast('Error: ' + (data.error || 'Failed to create checkout session'), 'error');
+        showToast('Error: ' + (data.error || 'Failed to create payment session'), 'error');
       }
     } catch (err) {
       console.error('[Upgrade] Error:', err);
@@ -2077,7 +2092,7 @@
       const limits = {
         free: 999999,  // Unlimited (backend only)
         trial: 30,
-        starter: 10,
+        starter: 20,
         pro: 30,
         business: 100
       };
