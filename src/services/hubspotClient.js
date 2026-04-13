@@ -8,7 +8,7 @@ function getBaseUrl() {
 }
 
 function getRedirectUri() {
-  return `${getBaseUrl()}/oauth/callback`;
+  return `${getBaseUrl()}/api/oauth/callback`;
 }
 
 // ALL scopes matching HubSpot Developer Portal configuration
