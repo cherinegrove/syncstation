@@ -155,9 +155,20 @@ SyncStation is a HubSpot integration that automatically syncs property values be
 router.post('/message', async (req, res) => {
   const { message, sessionId, portalId } = req.body;
 
+  console.log('[Chatbot] 🔵 Request received:', { message, sessionId, portalId });
+
   if (!message || !sessionId) {
+    console.log('[Chatbot] ❌ Missing required fields');
     return res.status(400).json({ error: 'Message and sessionId required' });
   }
+
+  // Check API key immediately
+  if (!process.env.CLAUDE_API_KEY) {
+    console.error('[Chatbot] ❌ CRITICAL: CLAUDE_API_KEY is not set!');
+    return res.status(500).json({ error: 'Chatbot configuration error' });
+  }
+
+  console.log('[Chatbot] ✅ API key present:', process.env.CLAUDE_API_KEY.substring(0, 20) + '...');
 
   try {
     const p = getPool();
@@ -165,6 +176,7 @@ router.post('/message', async (req, res) => {
     // Get user context if portalId provided
     let userContext = '';
     if (portalId) {
+      console.log('[Chatbot] Fetching user context for portal:', portalId);
       try {
         const tierInfo = await getPortalTier(portalId);
         const tierData = tierInfo || { tier: 'unknown' };
@@ -187,6 +199,7 @@ Mapping Limit: ${tierData.maxMappings || 'unknown'}
             userContext += `Current Mappings Used: ${mappingCount}\n`;
           }
         }
+        console.log('[Chatbot] User context loaded');
       } catch (err) {
         console.log('[Chatbot] Could not fetch user context:', err.message);
       }
@@ -204,6 +217,7 @@ Mapping Limit: ${tierData.maxMappings || 'unknown'}
           [sessionId]
         );
         conversationHistory = historyResult.rows.reverse();
+        console.log('[Chatbot] Loaded', conversationHistory.length, 'history messages');
       } catch (err) {
         console.log('[Chatbot] Could not fetch history:', err.message);
       }
@@ -225,6 +239,9 @@ Mapping Limit: ${tierData.maxMappings || 'unknown'}
       role: 'user',
       content: message
     });
+
+    console.log('[Chatbot] 🚀 Calling Claude API...');
+    console.log('[Chatbot] Messages count:', messages.length);
 
     // Call Claude API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -263,10 +280,20 @@ Guidelines:
       })
     });
 
+    console.log('[Chatbot] API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Chatbot] ❌ API error response:', errorText);
+      throw new Error(`Claude API returned ${response.status}: ${errorText}`);
+    }
+
     const data = await response.json();
+    console.log('[Chatbot] ✅ API response received');
 
     if (data.content && data.content[0]) {
       const botResponse = data.content[0].text;
+      console.log('[Chatbot] Response length:', botResponse.length, 'characters');
 
       // Store conversation history
       if (p) {
@@ -281,6 +308,7 @@ Guidelines:
              VALUES ($1, $2, $3, $4)`,
             [portalId || null, sessionId, 'assistant', botResponse]
           );
+          console.log('[Chatbot] Conversation saved to history');
         } catch (err) {
           console.log('[Chatbot] Could not store history:', err.message);
         }
@@ -291,14 +319,14 @@ Guidelines:
         sessionId: sessionId
       });
     } else {
-      console.error('[Chatbot] Unexpected API response:', data);
+      console.error('[Chatbot] ❌ Unexpected API response format:', data);
       res.status(500).json({ error: 'Failed to get response from chatbot' });
     }
 
   } catch (err) {
-    console.error('[Chatbot] Error:', err.message);
-    console.error('[Chatbot] Full error:', err);
-    console.error('[Chatbot] API Key present?', !!process.env.CLAUDE_API_KEY);
+    console.error('[Chatbot] ❌ Error:', err.message);
+    console.error('[Chatbot] ❌ Full error:', err);
+    console.error('[Chatbot] ❌ Stack:', err.stack);
     res.status(500).json({ error: 'Chatbot error' });
   }
 });
