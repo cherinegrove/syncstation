@@ -91,6 +91,11 @@ app.use('/api/settings', require('./src/routes/settings'));
 app.use('/api/stripe', require('./src/routes/stripe'));
 app.use('/api/webhooks', require('./src/routes/webhooks'));
 
+// Settings page route (for portal users)
+app.get('/settings', (req, res) => {
+  res.sendFile(path.join(__dirname, 'src/public/settings.html'));
+});
+
 // Root route - redirect to account page or info page
 app.get('/', (req, res) => {
   res.redirect('/account.html');
