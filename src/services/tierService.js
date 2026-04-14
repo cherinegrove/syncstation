@@ -114,8 +114,14 @@ async function getPortalTier(portalId) {
       [portalId]
     );
     
+    console.log('[Tiers] getPortalTier for', portalId, '- DB returned:', result.rows.length, 'rows');
+    if (result.rows.length > 0) {
+      console.log('[Tiers] DB tier value:', result.rows[0].tier);
+    }
+    
     if (result.rows.length === 0) {
       // New portal - default to FREE tier
+      console.log('[Tiers] Portal not found, creating with FREE tier');
       await p.query(
         'INSERT INTO portal_tiers (portal_id, tier, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (portal_id) DO NOTHING',
         [portalId, 'free']
@@ -148,7 +154,7 @@ async function getPortalTier(portalId) {
       canSync = false;  // Expired trials cannot sync
     }
     
-    return {
+    const returnValue = {
       tier: row.tier.toLowerCase(),  // Return lowercase for consistency
       created_at: row.created_at,
       paystack_customer_id: row.paystack_customer_id,
@@ -158,6 +164,9 @@ async function getPortalTier(portalId) {
       canSync,
       ...tierConfig
     };
+    
+    console.log('[Tiers] Returning tier:', returnValue.tier, 'for portal', portalId);
+    return returnValue;
   } catch (err) {
     console.error('[Tiers] Get tier error:', err.message);
     // On error, default to FREE tier (allow syncing)
