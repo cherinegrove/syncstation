@@ -163,6 +163,20 @@ async function processWebhookEvent(event) {
 
       console.log(`[Sync] Starting: ${sourceObjectType} ${objectId} -> ${targetObjectType} (${rule.direction})`);
 
+      // For bidirectional syncs: prevent infinite loops by marking the source as "recently written"
+      // When contact.firstname changes → syncs to project.hs_name → project webhook fires
+      // We need to prevent that project webhook from syncing BACK to contact.firstname
+      if (rule.direction === 'two_way') {
+        // Find which source properties are mapped
+        const sourceProperties = rule.mappings.map(m => 
+          rule.sourceObject === sourceObjectType ? m.source : m.target
+        );
+        // Mark all source properties as recently written to prevent reverse sync
+        const propsToMark = {};
+        sourceProperties.forEach(prop => propsToMark[prop] = 'preventLoop');
+        markWrite(sourceObjectType, String(objectId), propsToMark);
+      }
+
       const result = await sync(client, {
         portalId,
         sourceObjectType,
