@@ -24,6 +24,27 @@ pool.query('SELECT NOW()', (err, res) => {
 });
 
 // ============================================
+// 🆕 POLLING SERVICE INITIALIZATION
+// ============================================
+const { runPollingCycle, initPollingTable } = require('./src/services/pollingService');
+
+// Initialize polling table on startup
+(async () => {
+  await initPollingTable();
+  
+  // Run polling immediately on startup
+  console.log('[Polling] Running initial polling cycle...');
+  runPollingCycle();
+  
+  // Then run every 15 minutes
+  setInterval(() => {
+    runPollingCycle();
+  }, 15 * 60 * 1000); // 15 minutes
+  
+  console.log('[Polling] ✅ Polling service started (runs every 15 minutes)');
+})();
+
+// ============================================
 // MIDDLEWARE
 // ============================================
 
