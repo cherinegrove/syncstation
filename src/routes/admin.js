@@ -22,11 +22,19 @@ function getPool() {
 
 function requireAdmin(req, res, next) {
   // Check if admin is authenticated via session
+  console.log('[Admin Middleware] Session check:', { 
+    hasSession: !!req.session, 
+    adminId: req.session?.adminId,
+    path: req.path,
+    method: req.method
+  });
+  
   if (req.session && req.session.adminId) {
     return next();
   }
   
   // Not authenticated - redirect to login for HTML requests
+  console.log('[Admin Middleware] Not authenticated, request accepts:', req.get('Accept'));
   if (req.accepts('html')) {
     return res.redirect('/admin/auth/login');
   }
@@ -69,16 +77,20 @@ router.post('/portals/:portalId/tier', requireAdmin, async (req, res) => {
     const { portalId } = req.params;
     const { tier } = req.body;
     
+    console.log('[Admin] Tier update request:', { portalId, tier, adminId: req.session.adminId });
+    
     // Validate tier (check uppercase version in TIERS)
     if (!TIERS[tier.toUpperCase()]) {
+      console.log('[Admin] Invalid tier requested:', tier);
       return res.status(400).json({ error: 'Invalid tier' });
     }
     
     // Pass lowercase tier to setPortalTier (it handles validation internally)
-    await setPortalTier(portalId, tier.toLowerCase());
-    res.json({ ok: true });
+    const result = await setPortalTier(portalId, tier.toLowerCase());
+    console.log('[Admin] Tier update successful:', result);
+    res.json({ ok: true, ...result });
   } catch (err) {
-    console.error('[Admin] Error setting tier:', err.message);
+    console.error('[Admin] Error setting tier:', err.message, err.stack);
     res.status(500).json({ error: err.message });
   }
 });
