@@ -183,7 +183,7 @@
 
   async function load() {
     try {
-      const tierRes = await fetch('/account/tier?portalId=' + portalId).then(r => r.json());
+      const tierRes = await fetch('/api/account/tier?portalId=' + portalId).then(r => r.json());
 
       currentTier  = tierRes.tier || 'trial';
       currentUsage = tierRes.usage || { rules: 0, mappings: 0, maxMappingsPerRule: 0 };
@@ -351,7 +351,7 @@
     btn.disabled    = true;
 
     try {
-      const res  = await fetch('/account/change-tier', {
+      const res  = await fetch('/api/account/change-tier', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ portalId, newTier: selectedTier })
