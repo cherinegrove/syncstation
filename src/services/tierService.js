@@ -1,4 +1,4 @@
-// src/services/tierService.js - COMPLETE VERSION WITH PAYSTACK COLUMNS
+// src/services/tierService.js - FIXED VERSION WITH PROPER TIER ENFORCEMENT
 const { Pool } = require('pg');
 
 let pool = null;
@@ -38,7 +38,8 @@ const TIERS = {
     maxMappings: Infinity,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'],
-    trialDays: null
+    trialDays: null,
+    canSync: true  // ✅ FREE CAN SYNC
   },
   TRIAL: {
     name: 'TRIAL',
@@ -46,7 +47,8 @@ const TIERS = {
     maxMappings: 30,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'],
-    trialDays: 7
+    trialDays: 7,
+    canSync: true  // ✅ TRIAL CAN SYNC (until expired)
   },
   STARTER: {
     name: 'STARTER',
@@ -54,7 +56,8 @@ const TIERS = {
     maxMappings: 20,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals'],
-    trialDays: null
+    trialDays: null,
+    canSync: true
   },
   PRO: {
     name: 'PRO',
@@ -62,7 +65,8 @@ const TIERS = {
     maxMappings: 30,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'],
-    trialDays: null
+    trialDays: null,
+    canSync: true
   },
   BUSINESS: {
     name: 'BUSINESS',
@@ -70,7 +74,17 @@ const TIERS = {
     maxMappings: 100,
     maxRules: Infinity,
     allowedObjects: ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'],
-    trialDays: null
+    trialDays: null,
+    canSync: true
+  },
+  PROFESSIONAL: {
+    name: 'PROFESSIONAL',
+    price: 30,
+    maxMappings: 50,
+    maxRules: Infinity,
+    allowedObjects: ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'],
+    trialDays: null,
+    canSync: true
   },
   SUSPENDED: {
     name: 'SUSPENDED',
@@ -78,7 +92,8 @@ const TIERS = {
     maxMappings: 0,
     maxRules: 0,
     allowedObjects: [],
-    trialDays: null
+    trialDays: null,
+    canSync: false  // ❌ SUSPENDED CANNOT SYNC
   },
   CANCELLED: {
     name: 'CANCELLED',
@@ -86,7 +101,8 @@ const TIERS = {
     maxMappings: 0,
     maxRules: 0,
     allowedObjects: [],
-    trialDays: null
+    trialDays: null,
+    canSync: false  // ❌ CANCELLED CANNOT SYNC
   }
 };
 
@@ -99,36 +115,59 @@ async function getPortalTier(portalId) {
     );
     
     if (result.rows.length === 0) {
+      // New portal - default to FREE tier
       await p.query(
         'INSERT INTO portal_tiers (portal_id, tier, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (portal_id) DO NOTHING',
-        [portalId, 'trial']
+        [portalId, 'free']
       );
-      return { tier: 'trial', created_at: new Date(), expired: false };
+      return {
+        tier: 'free',
+        created_at: new Date(),
+        isExpired: false,
+        canSync: true,  // ✅ FREE CAN SYNC
+        ...TIERS.FREE
+      };
     }
     
     const row = result.rows[0];
-    // Normalize tier to lowercase for frontend
-    const tier = row.tier.toLowerCase();
-    const tierConfig = TIERS[tier.toUpperCase()] || TIERS.TRIAL;
+    // Normalize tier to uppercase for lookup, lowercase for storage
+    const tierUpper = row.tier.toUpperCase();
+    const tierConfig = TIERS[tierUpper] || TIERS.FREE;
     
-    let expired = false;
+    // Check if trial is expired
+    let isExpired = false;
     if (tierConfig.trialDays) {
       const createdDate = new Date(row.created_at);
       const expiryDate = new Date(createdDate.getTime() + (tierConfig.trialDays * 86400000));
-      expired = Date.now() > expiryDate.getTime();
+      isExpired = Date.now() > expiryDate.getTime();
+    }
+    
+    // Determine if portal can sync
+    let canSync = tierConfig.canSync;
+    if (isExpired) {
+      canSync = false;  // Expired trials cannot sync
     }
     
     return {
-      tier: tier,  // Use normalized lowercase tier
+      tier: row.tier.toLowerCase(),  // Return lowercase for consistency
       created_at: row.created_at,
       paystack_customer_id: row.paystack_customer_id,
       paystack_subscription_id: row.paystack_subscription_id,
       paystack_subscription_status: row.paystack_subscription_status,
-      expired
+      isExpired,
+      canSync,
+      ...tierConfig
     };
   } catch (err) {
     console.error('[Tiers] Get tier error:', err.message);
-    return { tier: 'trial', created_at: new Date(), expired: false };
+    // On error, default to FREE tier (allow syncing)
+    return {
+      tier: 'free',
+      created_at: new Date(),
+      isExpired: false,
+      canSync: true,
+      ...TIERS.FREE
+    };
   }
 }
 
@@ -159,6 +198,13 @@ async function setPortalTier(portalId, tier, paystackData = {}) {
   return { tier: validTier };
 }
 
+// ✅ NEW: Check if object type is allowed for this tier
+function isObjectAllowed(tier, objectType) {
+  const tierUpper = tier.toUpperCase();
+  const tierConfig = TIERS[tierUpper] || TIERS.FREE;
+  return tierConfig.allowedObjects.includes(objectType);
+}
+
 async function getAllPortals() {
   const p = getPool();
   try {
@@ -187,5 +233,6 @@ module.exports = {
   TIERS,
   getPortalTier,
   setPortalTier,
-  getAllPortals
+  getAllPortals,
+  isObjectAllowed  // ✅ EXPORT THIS
 };
