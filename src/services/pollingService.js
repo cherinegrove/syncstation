@@ -5,6 +5,7 @@ const { getPortalTier, isObjectAllowed } = require('./tierService');
 const { Pool } = require('pg');
 
 let pool = null;
+let isPolling = false;  // 🔥 CRITICAL: Mutex to prevent overlapping polling cycles
 
 function getPool() {
   if (!pool && process.env.DATABASE_URL) {
@@ -228,6 +229,34 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// 🔥 CRITICAL: Shared write tracker with webhooks to prevent loops
+const recentPollingWrites = new Map();
+
+function markPollingWrite(objectType, objectId, properties) {
+  const key = `${objectType}:${objectId}`;
+  recentPollingWrites.set(key, {
+    properties: Object.keys(properties),
+    timestamp: Date.now()
+  });
+  
+  // Clean up after 15 seconds (longer than webhook cleanup)
+  setTimeout(() => recentPollingWrites.delete(key), 15000);
+}
+
+// Export this so webhooks can check it
+function wasWrittenByPolling(objectType, objectId, propertyName) {
+  const key = `${objectType}:${objectId}`;
+  const write = recentPollingWrites.get(key);
+  
+  if (!write) return false;
+  if (Date.now() - write.timestamp > 15000) {
+    recentPollingWrites.delete(key);
+    return false;
+  }
+  
+  return write.properties.includes(propertyName);
+}
+
 // 🆕 OPTIMIZATION 2: Poll and sync with batching and rate limiting
 async function pollObjectType(portalId, objectType) {
   console.log(`[Polling] Starting poll for ${objectType} in portal ${portalId}`);
@@ -275,10 +304,13 @@ async function pollObjectType(portalId, objectType) {
     let syncedCount = 0;
     let errorCount = 0;
     
-    // 🆕 OPTIMIZATION 3: Process in batches of 20 with delays
-    const BATCH_SIZE = 20;
-    const DELAY_BETWEEN_SYNCS = 150; // 150ms between each sync
-    const DELAY_BETWEEN_BATCHES = 2000; // 2 seconds between batches
+    // 🔥 CRITICAL FIX: Reduced batch size and increased delays to prevent rate limiting
+    // HubSpot limit: 110 calls per 10 seconds
+    // With 8 rules per contact: 1 contact = ~16 API calls (fetch source + fetch targets + updates)
+    // Safe rate: Process 3-5 records per batch with 5 second breaks
+    const BATCH_SIZE = 5;  // REDUCED from 20 to 5
+    const DELAY_BETWEEN_SYNCS = 500;  // INCREASED from 150ms to 500ms
+    const DELAY_BETWEEN_BATCHES = 5000;  // INCREASED from 2s to 5s
     
     for (let batchStart = 0; batchStart < changedRecords.length; batchStart += BATCH_SIZE) {
       const batch = changedRecords.slice(batchStart, batchStart + BATCH_SIZE);
@@ -315,6 +347,7 @@ async function pollObjectType(portalId, objectType) {
               skipIfHasValue: rule.skipIfHasValue === 'true',
               associationRule: rule.assocRule || 'all',
               associationLabel: rule.assocLabel || '',
+              onWrite: markPollingWrite,  // 🔥 CRITICAL: Mark writes to prevent webhook loops
               ruleSourceObject: rule.sourceObject,  // For mapping reversal
               ruleTargetObject: rule.targetObject   // For mapping reversal
             });
@@ -374,6 +407,13 @@ async function pollObjectType(portalId, objectType) {
 
 // Main polling function - runs every 15 minutes
 async function runPollingCycle() {
+  // 🔥 CRITICAL: Prevent overlapping polling cycles
+  if (isPolling) {
+    console.log('[Polling] ⏭️ Skipping cycle - previous cycle still running');
+    return;
+  }
+  
+  isPolling = true;
   console.log('[Polling] ========== Starting polling cycle ==========');
   const startTime = Date.now();
   
@@ -421,6 +461,9 @@ async function runPollingCycle() {
     
   } catch (err) {
     console.error('[Polling] Polling cycle error:', err.message);
+  } finally {
+    // 🔥 CRITICAL: Always release the mutex
+    isPolling = false;
   }
 }
 
@@ -450,5 +493,6 @@ async function initPollingTable() {
 
 module.exports = {
   runPollingCycle,
-  initPollingTable
+  initPollingTable,
+  wasWrittenByPolling  // 🔥 Export so webhooks can check for polling writes
 };
