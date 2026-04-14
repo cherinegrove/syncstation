@@ -100,6 +100,13 @@ async function processWebhookEvent(event) {
   // Pluralize object type for API consistency (handle irregular plurals)
   const pluralObjectType = pluralize(objectType);
 
+  // 🔥 CRITICAL: Check if this was written by POLLING to prevent loops
+  const { wasWrittenByPolling } = require('../services/pollingService');
+  if (wasWrittenByPolling(pluralObjectType, String(objectId), propertyName)) {
+    console.log(`[Webhooks] Skipping ${pluralObjectType} ${objectId} - ${propertyName} was written by polling service`);
+    return;
+  }
+
   // Check if this was our own write (prevent loops)
   if (wasRecentlyWritten(pluralObjectType, String(objectId), propertyName)) {
     console.log(`[Webhooks] Skipping ${pluralObjectType} ${objectId} - ${propertyName} was recently written by us`);
@@ -198,9 +205,9 @@ async function processWebhookEvent(event) {
         console.error(`[Webhooks] Rule "${rule.name}" errors:`, result.errors);
       }
 
-      // 🆕 Add small delay between rules to prevent rate limiting (150ms)
+      // 🔥 CRITICAL: Increased delay to prevent rate limiting (500ms matches polling)
       if (i < matchingRules.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
     } catch (err) {
