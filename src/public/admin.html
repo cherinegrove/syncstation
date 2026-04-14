@@ -146,57 +146,54 @@
     </table>
   </div>
 
-  <!-- MESSAGE CENTER PANEL -->
+  <!-- MESSAGES PANEL -->
   <div class="panel" id="panel-messages">
     <div class="form-card">
-      <h3>📣 Send In-App Notification</h3>
-      <div class="subtitle">Sends a banner notification inside SyncStation for the selected portals.</div>
+      <h3>📬 Send In-App Notification</h3>
+      <div class="subtitle">Send a notification to one or all portals. The message appears in their dashboard.</div>
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Send To</label>
+          <label class="form-label">Target</label>
           <select id="msgTarget" onchange="toggleSpecificPortal()">
             <option value="all">All Portals</option>
-            <option value="specific">Specific Portal ID</option>
+            <option value="specific">Specific Portal</option>
           </select>
         </div>
         <div class="form-group" id="specificPortalGroup" style="display:none">
           <label class="form-label">Portal ID</label>
-          <input type="text" id="msgPortalId" placeholder="24888076">
+          <input type="text" id="msgPortalId" placeholder="123456">
         </div>
         <div class="form-group">
           <label class="form-label">Type</label>
           <select id="msgType">
-            <option value="info">ℹ Info</option>
-            <option value="warning">⚠ Warning</option>
-            <option value="error">🔴 Error</option>
-            <option value="success">✅ Success</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+            <option value="success">Success</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group full">
           <label class="form-label">Title</label>
-          <input type="text" id="msgTitle" placeholder="New feature available!">
+          <input type="text" id="msgTitle" placeholder="Your trial is ending soon">
         </div>
         <div class="form-group full">
           <label class="form-label">Message</label>
-          <textarea id="msgBody" rows="3" placeholder="Your message here..."></textarea>
+          <textarea id="msgBody" rows="4" placeholder="Upgrade now to keep your sync rules active."></textarea>
         </div>
         <div class="form-group">
           <label class="form-label">Action Button Label (optional)</label>
-          <input type="text" id="msgActionLabel" placeholder="Learn More">
+          <input type="text" id="msgActionLabel" placeholder="View Plans">
         </div>
         <div class="form-group">
           <label class="form-label">Action URL (optional)</label>
-          <input type="text" id="msgActionUrl" placeholder="/account?portalId=...">
+          <input type="text" id="msgActionUrl" placeholder="/account">
         </div>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
         <button class="btn btn-primary" onclick="sendMessage()">Send Notification</button>
         <span class="mono" id="msgStatus"></span>
       </div>
-    </div>
-    <div class="form-card">
-      <h3>⚡ Quick Messages</h3>
-      <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="quickMsg('trial_expiring')">Trial Expiring</button>
         <button class="btn btn-secondary btn-sm" onclick="quickMsg('usage_90')">Usage at 90%</button>
         <button class="btn btn-secondary btn-sm" onclick="quickMsg('new_feature')">New Feature</button>
@@ -376,13 +373,28 @@
 
   async function saveTier(portalId) {
     const tier = document.getElementById('tier-' + portalId).value;
-    await apiFetch('/admin/portals/' + portalId + '/tier', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier })
-    });
-    showToast('✓ Tier updated to ' + tier);
-    loadPortals();
+    try {
+      const res = await apiFetch('/admin/portals/' + portalId + '/tier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier })
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Tier update failed:', res.status, errorData);
+        showToast('✗ Failed to update tier: ' + (errorData.error || res.statusText));
+        return;
+      }
+      
+      const data = await res.json();
+      console.log('Tier update success:', data);
+      showToast('✓ Tier updated to ' + tier);
+      loadPortals();
+    } catch (err) {
+      console.error('Tier update error:', err);
+      showToast('✗ Error updating tier: ' + err.message);
+    }
   }
 
   function msgPortal(portalId) {
@@ -450,11 +462,11 @@
             <span class="toggle-slider"></span>
           </label>
           <div style="flex:1">
-            <div style="font-weight:500;font-size:15px">${rule.name}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;font-family:monospace">${rule.subject}</div>
+            <div style="font-weight:500;margin-bottom:2px">${escHtml(rule.name)}</div>
+            <div class="mono" style="font-size:11px">${rule.id}</div>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();testEmail('${rule.id}')">✉ Test</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();testEmail('${rule.id}')">Test</button>
             <span style="color:var(--muted);font-size:18px">›</span>
           </div>
         </div>
