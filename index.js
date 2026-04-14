@@ -90,7 +90,7 @@ app.use('/api/paddle', require('./src/routes/paddle'));
 app.use('/api/chatbot', require('./src/routes/chatbot'));
 app.use('/api/settings', require('./src/routes/settings'));
 app.use('/api/stripe', require('./src/routes/stripe'));
-app.use('/api/webhooks', require('./src/routes/webhooks'));
+app.use('/webhooks', require('./src/routes/webhooks')); // FIXED: Must be /webhooks not /api/webhooks - HubSpot sends to /webhooks/receive
 
 // Settings API at /settings (backward compatibility)
 app.use('/settings', require('./src/routes/settings'));
