@@ -37,6 +37,7 @@ router.get('/tier', async (req, res) => {
   if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
 
   const tierInfo = await getPortalTier(portalId);
+  console.log('[Account] GET /tier for portal', portalId, '- returning:', tierInfo.tier);
 
   let trial_started_at = null;
   try {
