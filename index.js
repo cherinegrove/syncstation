@@ -10,8 +10,9 @@ const cookieParser = require('cookie-parser');
 // Database connection
 const pool = require('./src/services/database');
 
-// Authentication routes
+// Authentication routes and middleware
 const authRoutes = require('./src/routes/authRoutes');
+const { requireAuth, requireRole, optionalAuth } = require('./src/middleware/requireAuth');
 
 // Initialize Express app
 const app = express();
@@ -45,8 +46,8 @@ app.use('/api/users', authRoutes);
 
 // ==================== EXISTING SYNCSTATION ROUTES ====================
 
-// Settings page - Your existing settings
-app.get('/settings', async (req, res) => {
+// Settings page - Protected route (requires login)
+app.get('/settings', requireAuth, async (req, res) => {
     try {
         res.sendFile(path.join(__dirname, 'src', 'public', 'account.html'));
     } catch (error) {
@@ -55,8 +56,8 @@ app.get('/settings', async (req, res) => {
     }
 });
 
-// Admin portal - Your existing admin
-app.get('/admin', async (req, res) => {
+// Admin portal - Protected route (requires owner/admin role)
+app.get('/admin', requireAuth, requireRole('admin'), async (req, res) => {
     try {
         res.sendFile(path.join(__dirname, 'src', 'public', 'admin.html'));
     } catch (error) {
@@ -65,8 +66,8 @@ app.get('/admin', async (req, res) => {
     }
 });
 
-// Admin portals endpoint
-app.get('/admin/portals', async (req, res) => {
+// Admin portals endpoint - Protected (requires admin role)
+app.get('/admin/portals', requireAuth, requireRole('admin'), async (req, res) => {
     try {
         // Your existing admin portals logic
         const result = await pool.query(
