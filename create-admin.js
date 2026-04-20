@@ -16,7 +16,7 @@ function question(query) {
 }
 
 async function createAdmin() {
-  console.log('\n🔐 SyncStation Admin User Creator\n');
+  console.log('\n🔐  Admin User Creator\n');
   console.log('━'.repeat(50));
   
   try {
@@ -90,7 +90,7 @@ async function createAdmin() {
     console.log('Email:   ', user.email || '(none)');
     console.log('Created: ', user.created_at);
     console.log('━'.repeat(50));
-    console.log('\n🎉 You can now login at: https://syncstation.app/admin\n');
+    console.log('\n🎉 You can now login at: https://portal.syncstation.app/admin\n');
     
     await pool.end();
     rl.close();
