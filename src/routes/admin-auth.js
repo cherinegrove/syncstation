@@ -162,7 +162,7 @@ router.post('/create-user', requireAuth, async (req, res) => {
       [username.toLowerCase(), tempHash, email, inviteToken, inviteExpires, 'pending']
     );
     
-    const inviteUrl = `${process.env.APP_BASE_URL || 'https://syncstation.app'}/admin/auth/accept-invite?token=${inviteToken}`;
+    const inviteUrl = `${process.env.APP_BASE_URL || 'https://portal.syncstation.app'}/admin/auth/accept-invite?token=${inviteToken}`;
     
     res.json({
       success: true,
@@ -373,7 +373,7 @@ router.post('/forgot-password', async (req, res) => {
       [resetToken, resetExpires, user.id]
     );
     
-    const resetUrl = `${process.env.APP_BASE_URL || 'https://syncstation.app'}/admin/auth/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.APP_BASE_URL || 'https://portal.syncstation.app'}/admin/auth/reset-password?token=${resetToken}`;
     
     // Return URL so you can manually share it (in production, send via email)
     res.json({ 
