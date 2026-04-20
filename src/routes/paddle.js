@@ -58,8 +58,8 @@ router.post('/create-checkout', async (req, res) => {
           portal_id: portalId,
           plan_tier: plan
         },
-        success_url: `${process.env.APP_BASE_URL || 'https://syncstation.app'}/payment-success?session_id={checkout_session_id}`,
-        cancel_url: `${process.env.APP_BASE_URL || 'https://syncstation.app'}/settings?portalId=${portalId}`
+        success_url: `${process.env.APP_BASE_URL || 'https://portal.syncstation.app'}/payment-success?session_id={checkout_session_id}`,
+        cancel_url: `${process.env.APP_BASE_URL || 'https://portal.syncstation.app'}/settings?portalId=${portalId}`
       })
     });
 
