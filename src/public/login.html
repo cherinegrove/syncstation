@@ -5,14 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - SyncStation</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -20,8 +15,7 @@
             justify-content: center;
             padding: 20px;
         }
-        
-        .login-container {
+        .card {
             background: white;
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -29,293 +23,136 @@
             width: 100%;
             padding: 40px;
         }
-        
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
+        .logo { text-align: center; margin-bottom: 30px; }
+        .logo h1 { color: #2563eb; font-size: 32px; margin-bottom: 8px; }
+        .logo p { color: #6b7280; font-size: 14px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #374151; font-weight: 500; font-size: 14px; }
+        input[type="email"], input[type="password"] {
+            width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb;
+            border-radius: 8px; font-size: 14px; transition: all 0.3s;
         }
-        
-        .logo h1 {
-            color: #2563eb;
-            font-size: 32px;
-            margin-bottom: 8px;
-        }
-        
-        .logo p {
-            color: #6b7280;
-            font-size: 14px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #374151;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-        
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .checkbox-group input[type="checkbox"] {
-            width: auto;
-            margin-right: 8px;
-        }
-        
-        .checkbox-group label {
-            margin: 0;
-            color: #6b7280;
-            font-size: 14px;
-        }
-        
+        input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .checkbox-group { display: flex; align-items: center; margin-bottom: 20px; }
+        .checkbox-group input { width: auto; margin-right: 8px; }
+        .checkbox-group label { margin: 0; color: #6b7280; font-size: 14px; }
         .btn {
-            width: 100%;
-            padding: 12px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
+            width: 100%; padding: 12px; background: #2563eb; color: white;
+            border: none; border-radius: 8px; font-size: 16px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s;
         }
-        
-        .btn:hover {
-            background: #1d4ed8;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-        }
-        
-        .btn:disabled {
-            background: #9ca3af;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .links {
-            margin-top: 20px;
-            text-align: center;
-        }
-        
-        .links a {
-            color: #2563eb;
-            text-decoration: none;
-            font-size: 14px;
-            transition: color 0.3s;
-        }
-        
-        .links a:hover {
-            color: #1d4ed8;
-            text-decoration: underline;
-        }
-        
-        .divider {
-            text-align: center;
-            margin: 20px 0;
-            color: #9ca3af;
-            font-size: 14px;
-        }
-        
-        .alert {
-            padding: 12px 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-        
-        .alert-error {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            color: #991b1b;
-        }
-        
-        .alert-success {
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            color: #166534;
-        }
-        
-        .hidden {
-            display: none;
-        }
+        .btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+        .btn:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
+        .links { margin-top: 20px; text-align: center; }
+        .links a { color: #2563eb; text-decoration: none; font-size: 14px; }
+        .links a:hover { text-decoration: underline; }
+        .divider { text-align: center; margin: 20px 0; color: #9ca3af; font-size: 14px; }
+        .alert { padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+        .alert-error   { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+        .alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
     </style>
 </head>
 <body>
-    <div class="login-container">
+    <div class="card">
         <div class="logo">
             <h1>SyncStation</h1>
             <p>HubSpot Property Sync Platform</p>
         </div>
-        
+
         <div id="alertContainer"></div>
-        
+
         <form id="loginForm">
             <div class="form-group">
                 <label for="email">Email Address</label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    required 
-                    autocomplete="email"
-                    placeholder="you@company.com"
-                >
+                <input type="email" id="email" required autocomplete="email" placeholder="you@company.com">
             </div>
-            
             <div class="form-group">
                 <label for="password">Password</label>
-                <input 
-                    type="password" 
-                    id="password" 
-                    name="password" 
-                    required 
-                    autocomplete="current-password"
-                    placeholder="Enter your password"
-                >
+                <input type="password" id="password" required autocomplete="current-password" placeholder="Enter your password">
             </div>
-            
             <div class="checkbox-group">
-                <input type="checkbox" id="rememberMe" name="rememberMe">
+                <input type="checkbox" id="rememberMe">
                 <label for="rememberMe">Remember me</label>
             </div>
-            
-            <button type="submit" class="btn" id="loginBtn">
-                Login
-            </button>
+            <button type="submit" class="btn" id="loginBtn">Login</button>
         </form>
-        
+
         <div class="links">
             <a href="/forgot-password">Forgot password?</a>
         </div>
-        
-        <div class="divider">
-            Don't have an account?
-        </div>
-        
+        <div class="divider">Don't have an account?</div>
         <div class="links">
             <a href="/register">Create an account</a>
         </div>
     </div>
-    
+
     <script>
         const loginForm = document.getElementById('loginForm');
-        const loginBtn = document.getElementById('loginBtn');
-        const alertContainer = document.getElementById('alertContainer');
-        
-        // Check for portal ID in URL
+        const loginBtn  = document.getElementById('loginBtn');
+        const alertBox  = document.getElementById('alertContainer');
+
         const urlParams = new URLSearchParams(window.location.search);
-        const portalId = urlParams.get('portal');
-        
-        // Show alert
-        function showAlert(message, type = 'error') {
-            alertContainer.innerHTML = `
-                <div class="alert alert-${type}">
-                    ${message}
-                </div>
-            `;
+        const portalId  = urlParams.get('portalId') || urlParams.get('portal');
+
+        function showAlert(msg, type = 'error') {
+            alertBox.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
         }
-        
-        // Handle login
+
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+
+            const email      = document.getElementById('email').value;
+            const password   = document.getElementById('password').value;
             const rememberMe = document.getElementById('rememberMe').checked;
-            
-            loginBtn.disabled = true;
+
+            loginBtn.disabled    = true;
             loginBtn.textContent = 'Logging in...';
-            alertContainer.innerHTML = '';
-            
+            alertBox.innerHTML   = '';
+
             try {
                 const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        email,
-                        password,
-                        portalId
-                    })
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ email, password, portalId })
                 });
-                
+
                 const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'Login failed');
-                }
-                
+                if (!response.ok) throw new Error(data.error || 'Login failed');
+
                 // Store session token
-                if (rememberMe) {
-                    localStorage.setItem('sessionToken', data.sessionToken);
-                } else {
-                    sessionStorage.setItem('sessionToken', data.sessionToken);
-                }
-                
-                // Store user info
-                localStorage.setItem('user', JSON.stringify(data.user));
+                const storage = rememberMe ? localStorage : sessionStorage;
+                storage.setItem('sessionToken', data.sessionToken);
+                localStorage.setItem('user',    JSON.stringify(data.user));
                 localStorage.setItem('portals', JSON.stringify(data.portals));
-                
+
                 showAlert('Login successful! Redirecting...', 'success');
-                
-                // Redirect based on portal access
+
+                // FIX: use portalId= (not portal=) to match what settings.html reads
                 setTimeout(() => {
-                    if (data.portals.length === 1) {
-                        // Single portal - go directly to dashboard
-                        window.location.href = `/settings?portal=${data.portals[0].portal_id}`;
-                    } else if (portalId) {
-                        // Specific portal requested
-                        window.location.href = `/settings?portal=${portalId}`;
-                    } else {
-                        // Multiple portals - show selector
-                        window.location.href = '/portal-selector';
-                    }
-                }, 1000);
-                
-            } catch (error) {
-                showAlert(error.message);
-                loginBtn.disabled = false;
+                    const pid = portalId || (data.portals && data.portals[0]?.portal_id);
+                    window.location.href = pid ? `/settings?portalId=${pid}` : '/settings';
+                }, 800);
+
+            } catch (err) {
+                showAlert(err.message);
+                loginBtn.disabled    = false;
                 loginBtn.textContent = 'Login';
             }
         });
-        
-        // Check if already logged in
-        const sessionToken = localStorage.getItem('sessionToken') || sessionStorage.getItem('sessionToken');
-        if (sessionToken) {
-            // Verify session is still valid
-            fetch('/api/auth/me', {
-                headers: {
-                    'Authorization': `Bearer ${sessionToken}`
-                }
-            }).then(response => {
-                if (response.ok) {
-                    window.location.href = '/portal-selector';
-                }
-            });
+
+        // Auto-redirect if already logged in
+        const existingToken = localStorage.getItem('sessionToken') || sessionStorage.getItem('sessionToken');
+        if (existingToken) {
+            fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${existingToken}` } })
+                .then(r => r.ok ? r.json() : Promise.reject())
+                .then(data => {
+                    const pid = data.portals?.[0]?.portal_id;
+                    window.location.href = pid ? `/settings?portalId=${pid}` : '/settings';
+                })
+                .catch(() => {
+                    localStorage.removeItem('sessionToken');
+                    sessionStorage.removeItem('sessionToken');
+                });
         }
     </script>
 </body>
