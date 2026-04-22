@@ -1,73 +1,2712 @@
-<!-- ============================================================
-     HUBSPOT INSTALL BANNER
-     Add this HTML right after the opening <div class="main"> tag
-     in src/public/settings.html
-     ============================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncStation — Sync Rules</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- FIELD TYPE VALIDATION -->
+<link rel="stylesheet" href="/css/fieldTypeValidation.css">
+<script src="/js/fieldTypeValidation.js"></script>
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --accent: #ff6b35;
+    --accent2: #ffb347;
+    --text: #f0f0f4;
+    --muted: #8888a0;
+    --success: #4ade80;
+    --error: #f87171;
+    --radius: 10px;
+  }
 
-<!-- Not-connected banner — hidden by default, shown via JS -->
-<div id="hubspotConnectBanner" style="display:none;background:linear-gradient(135deg,rgba(255,107,53,0.12),rgba(255,179,71,0.08));border:1px solid rgba(255,107,53,0.4);border-radius:12px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
-  <div style="display:flex;align-items:center;gap:14px">
-    <div style="font-size:32px;flex-shrink:0">🔌</div>
-    <div>
-      <div style="font-weight:600;font-size:15px;margin-bottom:4px">HubSpot not connected</div>
-      <div style="color:var(--muted);font-size:13px">Install the SyncStation app to your HubSpot portal to start syncing properties.</div>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    isolation: isolate;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    flex: 1;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .header-nav {
+    display: flex;
+    gap: 4px;
+    background: var(--surface2);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .header-nav a {
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 7px 20px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    color: var(--muted);
+  }
+
+  .header-nav a.active {
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .header-nav a:hover {
+    color: var(--text);
+  }
+
+  .portal-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    flex: 1;
+    text-align: right;
+  }
+
+  .main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+
+  .page-subtitle {
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 32px;
+  }
+
+  .rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .rule-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .rule-card:hover { border-color: #44445a; }
+  .rule-card.active { border-left: 3px solid var(--accent); }
+
+  .rule-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    gap: 14px;
+  }
+
+  .rule-toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  .rule-toggle input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--surface2);
+    border-radius: 22px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+
+  input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+  input:checked + .toggle-slider:before { transform: translateX(18px); background: white; }
+
+  .rule-info { flex: 1; }
+
+  .rule-name {
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+
+  .rule-meta {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .rule-meta span {
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .rule-actions { display: flex; gap: 8px; }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.15s;
+  }
+
+  .btn-icon:hover { background: var(--surface2); color: var(--text); }
+  .btn-icon.delete:hover { background: #3d1414; color: var(--error); border-color: var(--error); }
+
+  .rule-mappings {
+    padding: 0 20px 16px 74px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mapping-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mapping-pill .arrow { color: var(--accent); }
+
+  .btn-add {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255,107,53,0.04);
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 32px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  select, input[type="text"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 9px 12px;
+    width: 100%;
+    transition: border-color 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+
+  select:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  select option { background: var(--surface2); }
+
+  .mappings-section { margin-bottom: 24px; }
+
+  .mappings-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mappings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .mapping-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .mapping-arrow {
+    color: var(--accent);
+    font-size: 18px;
+    text-align: center;
+    font-weight: 300;
+  }
+
+  .btn-remove-mapping {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .btn-remove-mapping:hover { background: #3d1414; color: var(--error); border-color: var(--error); }
+
+  .btn-add-mapping {
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.15s;
+  }
+
+  .btn-add-mapping:hover { border-color: var(--accent); color: var(--accent); }
+
+  .modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { color: var(--text); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+
+  .btn-primary:hover { background: #ff8555; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-title { font-size: 18px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+  .empty-desc { font-size: 14px; line-height: 1.6; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 300;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-left: 3px solid var(--success); }
+  .toast.error { border-left: 3px solid var(--error); }
+
+  /* Universal Modal System */
+  .sync-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    padding: 20px;
+  }
+
+  .sync-modal-overlay.open { display: flex; }
+
+  .sync-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    animation: syncModalSlide 0.3s ease-out;
+  }
+
+  @keyframes syncModalSlide {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .sync-modal-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .sync-modal-warning { color: #fb923c; }
+  .sync-modal-info { color: #60a5fa; }
+  .sync-modal-input { color: #a78bfa; }
+  .sync-modal-success { color: #4ade80; }
+  .sync-modal-error { color: #f87171; }
+
+  .sync-modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .sync-modal-message {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 24px;
+    white-space: pre-line;
+  }
+
+  .sync-modal-input-field {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: var(--text);
+    margin-bottom: 24px;
+    font-family: inherit;
+  }
+
+  .sync-modal-input-field:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .sync-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .sync-modal-actions .btn {
+    min-width: 120px;
+  }
+
+  /* Limit Error Modal */
+  .limit-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+  }
+
+  .limit-modal-overlay.open { display: flex; }
+
+  .limit-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    animation: slideDown 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .limit-modal-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .limit-modal-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .limit-modal-message {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+
+  .limit-modal-plans {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .limit-plan {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 16px;
+    transition: all 0.2s;
+  }
+
+  .limit-plan:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .limit-plan-highlight {
+    position: relative;
+    border: 2px solid var(--accent);
+    background: rgba(255, 107, 53, 0.05);
+  }
+
+  .limit-plan-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 10px;
+  }
+
+  .limit-plan-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .limit-plan-price {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .limit-plan-price span {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .limit-plan-mappings {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .limit-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .limit-modal-actions .btn {
+    min-width: 140px;
+  }
+
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .stat-card:hover {
+    border-color: #44445a;
+  }
+
+  .stat-card.clickable:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .stat-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 28px;
+    font-weight: 500;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-value.errors {
+    color: var(--error);
+  }
+
+  .stat-label { font-size: 12px; color: var(--muted); }
+  .loading { color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; }
+
+  .notif-banner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .notif-info    { border-left: 3px solid #60a5fa; }
+  .notif-warning { border-left: 3px solid #fbbf24; }
+  .notif-error   { border-left: 3px solid var(--error); }
+  .notif-success { border-left: 3px solid var(--success); }
+  
+  /* Validation feedback styling within mapping rows */
+  .mapping-validation {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+
+  /* ERROR LOG STYLES */
+  .error-log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+
+  .error-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .error-log-title {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .error-log-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-small:hover {
+    color: var(--text);
+    border-color: #44445a;
+  }
+
+  .error-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .error-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--error);
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .error-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .error-message {
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .error-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .error-meta span {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .error-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+
+  /* PayStack Upgrade UI Styles */
+  .upgrade-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 32px;
+  }
+
+  .upgrade-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .plan-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .plan-card {
+    position: relative;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .plan-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .plan-featured {
+    border: 2px solid var(--accent);
+  }
+
+  .plan-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 4px 12px;
+    border-radius: 12px;
+  }
+
+  .plan-header {
+    margin-bottom: 20px;
+  }
+
+  .plan-card h4 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--text);
+  }
+
+  .plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+  }
+
+  .plan-price .currency {
+    font-size: 18px;
+    color: var(--muted);
+  }
+
+  .plan-price .amount {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .plan-price .period {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 24px 0;
+    flex: 1;
+  }
+
+  .plan-features li {
+    padding: 8px 0;
+    color: var(--text);
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .plan-features li:last-child {
+    border-bottom: none;
+  }
+
+  .plan-features li:before {
+    content: '✓';
+    color: var(--success);
+    font-weight: bold;
+    margin-right: 8px;
+  }
+
+  .btn-upgrade {
+    width: 100%;
+    padding: 12px 24px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: auto;
+  }
+
+  .btn-upgrade:hover {
+    background: var(--accent2);
+    transform: scale(1.02);
+  }
+
+  .plan-featured .btn-upgrade {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⇄</div>
+    SyncStation
+  </div>
+  <nav class="header-nav">
+    <a id="navSettings" href="#" class="active">Sync Rules</a>
+    <a id="navAccount" href="#">Account</a>
+  </nav>
+  <div style="display:flex;align-items:center;gap:10px;flex:1;justify-content:flex-end">
+    <a id="hubspotInstallBtn" href="/oauth/install" style="display:none;background:rgba(255,107,53,0.15);border:1px solid rgba(255,107,53,0.4);color:var(--accent);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500;white-space:nowrap">🔗 Connect HubSpot</a>
+    <div class="portal-badge" id="portalBadge">Loading...</div>
+  </div>
+</div>
+
+<div id="notificationBanners" style="max-width:900px;margin:16px auto 0;padding:0 24px"></div>
+
+<div class="main">
+  <div class="page-title">Sync Rules</div>
+  <div class="page-subtitle">Automatically sync property values between associated CRM objects.</div>
+
+  <!-- Rate Limit Info Banner -->
+  <div style="background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(96, 165, 250, 0.08)); border: 1px solid rgba(74, 222, 128, 0.2); border-left: 3px solid var(--success); border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;">
+    <div style="display: flex; align-items: start; gap: 14px;">
+      <div style="font-size: 24px; line-height: 1; flex-shrink: 0; margin-top: 2px;">⚡</div>
+      <div style="flex: 1;">
+        <div style="font-weight: 600; font-size: 15px; margin-bottom: 6px; color: var(--text);">
+
+        <div style="font-size: 13px; color: var(--muted); line-height: 1.5;">
+          <strong style="color: var(--text);">💡 Good to Know:</strong> HubSpot's API imposes rate limits on all third-party tools (not specific to SyncStation). Our system automatically manages these limits to give you the most reliable sync experience possible, ensuring your data stays perfectly in sync without errors.
+        </div>
+      </div>
     </div>
   </div>
-  <a href="/oauth/install" style="background:var(--accent);color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap;flex-shrink:0">
-    🔗 Connect to HubSpot
-  </a>
-</div>
 
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-label">Total rules</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statActive">0</div>
+      <div class="stat-label">Active rules</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statMappings">0</div>
+      <div class="stat-label">Property mappings</div>
+    </div>
+    <div class="stat-card clickable" onclick="toggleErrorLog()">
+      <div class="stat-value errors" id="statErrors">0</div>
+      <div class="stat-label">Sync errors</div>
+    </div>
+  </div>
 
-<!-- ============================================================
-     INSTALL BUTTON near "Add sync rule" button
-     Replace the existing btn-add button with this version
-     that includes the install button alongside it.
-     
-     Find this line in settings.html:
-       <button class="btn-add" onclick="openModal()">
-     
-     Replace the entire btn-add button AND add the install button:
-     ============================================================ -->
+  <!-- PayStack Upgrade Section -->
+  <div id="upgradeSection" style="display: none;">
+    <div class="upgrade-container">
+      <div class="upgrade-header">
+        <div>
+          <h3 style="margin: 0 0 4px 0; font-size: 18px;">Upgrade Your Plan</h3>
+          <p style="margin: 0; color: var(--muted); font-size: 14px;">
+            Current: <span id="currentTierName" style="color: var(--accent); font-weight: 500;">TRIAL</span> 
+            · <span id="currentMappingLimit">30</span> property mappings
+          </p>
+        </div>
+      </div>
 
-<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-  <button class="btn-add" onclick="openModal()" style="flex:1;min-width:200px">
+      <div class="plan-cards">
+        <!-- Starter Plan -->
+        <div class="plan-card">
+          <div class="plan-header">
+            <h4>Starter</h4>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">10</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <ul class="plan-features">
+            <li>20 property mappings</li>
+            <li>Real-time webhook sync for standard objects</li>
+            <li>15-min API sync for custom objects</li>
+            <li>Flexible field type mapping</li>
+          </ul>
+          <button class="btn-upgrade" onclick="upgradeToPlan('starter')">
+            Upgrade to Starter
+          </button>
+        </div>
+
+        <!-- Pro Plan -->
+        <div class="plan-card plan-featured">
+          <div class="plan-badge">POPULAR</div>
+          <div class="plan-header">
+            <h4>Pro</h4>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">15</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <ul class="plan-features">
+            <li>30 property mappings</li>
+            <li>Real-time webhook sync for standard objects</li>
+            <li>15-min API sync for custom objects</li>
+            <li>Flexible field type mapping</li>
+          </ul>
+          <button class="btn-upgrade" onclick="upgradeToPlan('pro')">
+            Upgrade to Pro
+          </button>
+        </div>
+
+        <!-- Business Plan -->
+        <div class="plan-card">
+          <div class="plan-header">
+            <h4>Business</h4>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">40</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <ul class="plan-features">
+            <li>100 property mappings</li>
+            <li>Real-time webhook sync for standard objects</li>
+            <li>15-min API sync for custom objects</li>
+            <li>Flexible field type mapping</li>
+          </ul>
+          <button class="btn-upgrade" onclick="upgradeToPlan('business')">
+            Upgrade to Business
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ERROR LOG -->
+  <div class="error-log" id="errorLog" style="display:none">
+    <div class="error-log-header">
+      <div class="error-log-title">
+        <span>⚠️</span>
+        <span>Sync Error Log</span>
+      </div>
+      <div class="error-log-actions">
+        <button class="btn-small" onclick="loadErrors()">🔄 Refresh</button>
+        <button class="btn-small" onclick="clearErrors()">🗑 Clear All</button>
+        <button class="btn-small" onclick="toggleErrorLog()">✕ Close</button>
+      </div>
+    </div>
+    <div class="error-list" id="errorList">
+      <div class="error-empty">
+        <div style="font-size:32px;margin-bottom:8px">✅</div>
+        <div>No sync errors</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rules-list" id="rulesList"></div>
+
+  <button class="btn-add" onclick="openModal()">
     <span style="font-size:18px">+</span> Add sync rule
   </button>
-  <a href="/oauth/install" id="installHubspotBtn" style="display:none;padding:12px 20px;background:var(--surface);border:2px dashed rgba(255,107,53,0.5);border-radius:var(--radius);color:var(--accent);text-decoration:none;font-size:14px;white-space:nowrap;transition:all 0.2s">
-    🔗 Install to HubSpot
-  </a>
 </div>
 
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span>⇄</span>
+      <span id="modalTitle">New Sync Rule</span>
+    </div>
 
-<!-- ============================================================
-     JAVASCRIPT — Add this inside the <script> tag in settings.html
-     Paste it right after the line:  loadNotifications();
-     ============================================================ -->
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Source Object</label>
+        <select id="sourceObject" onchange="loadProperties()">
+          <option value="">Loading objects...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Target Object</label>
+        <select id="targetObject" onchange="loadProperties()">
+          <option value="">Loading objects...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Association Rule</label>
+        <select id="assocRule" onchange="toggleLabelField()">
+          <option value="all">All associated records</option>
+          <option value="recent">Most recently associated</option>
+          <option value="first">First associated</option>
+          <option value="labeled">Specific label only</option>
+        </select>
+      </div>
+      <div class="form-group" id="labelGroup" style="display:none">
+        <label>Association Label</label>
+        <input type="text" id="assocLabel" placeholder="e.g. Primary">
+      </div>
+      <div class="form-group">
+        <label>Sync Direction</label>
+        <select id="syncDirection">
+          <option value="one_way">One-way: source → target</option>
+          <option value="two_way">Bidirectional (most recent wins)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Skip if target has value?</label>
+        <select id="skipIfHasValue">
+          <option value="false">No — always overwrite</option>
+          <option value="true">Yes — never overwrite</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Rule Name</label>
+        <input type="text" id="ruleName" placeholder="e.g. Contact → Company sync">
+      </div>
+    </div>
+
+    <div class="mappings-section">
+      <div class="mappings-title">
+        Property Mappings
+        <span class="loading" id="propsStatus"></span>
+      </div>
+      <div class="mappings-list" id="mappingsList"></div>
+      <button class="btn-add-mapping" onclick="checkAndAddMapping()">+ Add property mapping</button>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Universal Modal System -->
+<div class="sync-modal-overlay" id="syncConfirmModal">
+  <div class="sync-modal">
+    <div class="sync-modal-icon sync-modal-warning">⚠️</div>
+    <div class="sync-modal-title" id="confirmTitle">Confirm Action</div>
+    <div class="sync-modal-message" id="confirmMessage"></div>
+    <div class="sync-modal-actions">
+      <button class="btn btn-secondary" onclick="closeConfirmModal(false)">Cancel</button>
+      <button class="btn btn-primary" onclick="closeConfirmModal(true)" id="confirmBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="sync-modal-overlay" id="syncAlertModal">
+  <div class="sync-modal">
+    <div class="sync-modal-icon sync-modal-info" id="alertIcon">ℹ️</div>
+    <div class="sync-modal-title" id="alertTitle">Notice</div>
+    <div class="sync-modal-message" id="alertMessage"></div>
+    <div class="sync-modal-actions">
+      <button class="btn btn-primary" onclick="closeAlertModal()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="sync-modal-overlay" id="syncPromptModal">
+  <div class="sync-modal">
+    <div class="sync-modal-icon sync-modal-input">✏️</div>
+    <div class="sync-modal-title" id="promptTitle">Input Required</div>
+    <div class="sync-modal-message" id="promptMessage"></div>
+    <input type="text" class="sync-modal-input-field" id="promptInput" placeholder="">
+    <div class="sync-modal-actions">
+      <button class="btn btn-secondary" onclick="closePromptModal(null)">Cancel</button>
+      <button class="btn btn-primary" onclick="closePromptModal(document.getElementById('promptInput').value)">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Limit Error Modal -->
+<div class="limit-modal-overlay" id="limitModalOverlay">
+  <div class="limit-modal">
+    <div class="limit-modal-icon">⚠️</div>
+    <div class="limit-modal-title">Mapping Limit Reached</div>
+    <div class="limit-modal-message" id="limitModalMessage"></div>
+    <div class="limit-modal-plans">
+      <div class="limit-plan">
+        <div class="limit-plan-name">Starter</div>
+        <div class="limit-plan-price">$7<span>/mo</span></div>
+        <div class="limit-plan-mappings">10 mappings</div>
+      </div>
+      <div class="limit-plan limit-plan-highlight">
+        <div class="limit-plan-badge">POPULAR</div>
+        <div class="limit-plan-name">Pro</div>
+        <div class="limit-plan-price">$15<span>/mo</span></div>
+        <div class="limit-plan-mappings">30 mappings</div>
+      </div>
+      <div class="limit-plan">
+        <div class="limit-plan-name">Business</div>
+        <div class="limit-plan-price">$25<span>/mo</span></div>
+        <div class="limit-plan-mappings">100 mappings</div>
+      </div>
+    </div>
+    <div class="limit-modal-actions">
+      <button class="btn btn-secondary" onclick="closeLimitModal()">Close</button>
+      <button class="btn btn-primary" onclick="window.location.href='/account?portalId=' + portalId">Upgrade Plan</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script>
-// Check if HubSpot is connected and show banner/button if not
-async function checkHubSpotConnection() {
-  try {
-    const res  = await fetch('/settings/tier?portalId=' + portalId);
-    const data = await res.json();
+  const urlParams = new URLSearchParams(window.location.search);
+  const portalId  = urlParams.get('portalId') || 'Demo';
+  
+  // CRITICAL: Use portal-specific localStorage key to prevent cross-portal contamination
+  const storageKey = `propbridge_rules_${portalId}`;
+  let rules = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  let editingId = null;
+  let sourceProps = [];
+  let targetProps = [];
+  let availableObjects = [];
+  let syncErrors = [];
 
-    // If tier fetch fails or returns no token indicator, check directly
-    const tokenRes  = await fetch('/api/portal/connected?portalId=' + portalId);
-    const tokenData = await tokenRes.json();
+  document.getElementById('portalBadge').textContent  = 'Portal ' + portalId;
+  document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
+  document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
 
-    if (!tokenData.connected) {
-      // Show the top banner
-      const banner = document.getElementById('hubspotConnectBanner');
-      if (banner) banner.style.display = 'flex';
-
-      // Show the install button next to "Add sync rule"
-      const btn = document.getElementById('installHubspotBtn');
-      if (btn) btn.style.display = 'block';
+  // Load available objects from HubSpot
+  async function loadAvailableObjects() {
+    try {
+      const response = await fetch('/settings/objects?portalId=' + portalId);
+      const data = await response.json();
+      
+      // Standard objects that always work
+      const standardObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts', standard: true },
+        { objectTypeId: 'companies', label: 'Companies', standard: true },
+        { objectTypeId: 'deals', label: 'Deals', standard: true },
+        { objectTypeId: 'tickets', label: 'Tickets', standard: true },
+        { objectTypeId: 'leads', label: 'Leads', standard: true }
+      ];
+      
+      // Add custom objects from API (like Projects)
+      const customObjects = (data.objects || [])
+        .filter(obj => !standardObjects.find(s => s.label === obj.label))
+        .map(obj => ({
+          objectTypeId: obj.objectTypeId || obj.name,
+          label: obj.label || obj.name,
+          custom: true
+        }));
+      
+      availableObjects = [...standardObjects, ...customObjects];
+      
+      // Populate dropdowns
+      populateObjectDropdowns();
+      
+    } catch (err) {
+      console.error('[Settings] Failed to load objects:', err);
+      // Fallback to standard objects only
+      availableObjects = [
+        { objectTypeId: 'contacts', label: 'Contacts' },
+        { objectTypeId: 'companies', label: 'Companies' },
+        { objectTypeId: 'deals', label: 'Deals' },
+        { objectTypeId: 'tickets', label: 'Tickets' },
+        { objectTypeId: 'leads', label: 'Leads' }
+      ];
+      populateObjectDropdowns();
     }
-  } catch (e) {
-    // Silently fail — don't block the page if this check errors
+  }
+
+  function populateObjectDropdowns() {
+    const sourceSelect = document.getElementById('sourceObject');
+    const targetSelect = document.getElementById('targetObject');
+    
+    const options = '<option value="">Select object...</option>' + 
+      availableObjects.map(obj => 
+        `<option value="${obj.objectTypeId}">${obj.label}${obj.custom ? ' (Custom)' : ''}</option>`
+      ).join('');
+    
+    sourceSelect.innerHTML = options;
+    targetSelect.innerHTML = options;
+  }
+
+  // Load sync errors
+  async function loadErrors() {
+    try {
+      const res = await fetch('/settings/errors?portalId=' + portalId);
+      if (!res.ok) {
+        console.log('Error endpoint returned:', res.status);
+        return;
+      }
+      const data = await res.json();
+      syncErrors = data.errors || [];
+      
+      document.getElementById('statErrors').textContent = syncErrors.length;
+      
+      const list = document.getElementById('errorList');
+      if (syncErrors.length === 0) {
+        list.innerHTML = `
+          <div class="error-empty">
+            <div style="font-size:32px;margin-bottom:8px">✅</div>
+            <div>No sync errors</div>
+          </div>
+        `;
+        return;
+      }
+      
+      list.innerHTML = syncErrors.map(err => {
+        const time = new Date(err.created_at).toLocaleString();
+        return `
+          <div class="error-item">
+            <div class="error-time">${time}</div>
+            <div class="error-message">${err.error_message || 'Unknown error'}</div>
+            <div class="error-meta">
+              ${err.rule_name ? `<span>Rule: ${err.rule_name}</span>` : ''}
+              ${err.source_object ? `<span>${err.source_object}${err.source_id ? ' ' + err.source_id : ''}</span>` : ''}
+              ${err.target_object ? `<span>→ ${err.target_object}</span>` : ''}
+              ${err.error_type ? `<span>${err.error_type}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      console.error('[Error Log] Failed to load:', err);
+    }
+  }
+
+  async function clearErrors() {
+    if (!await syncConfirm('Are you sure you want to clear all sync errors?', 'Clear Errors', 'Clear All')) return;
+    
+    try {
+      await fetch('/settings/errors?portalId=' + portalId, { method: 'DELETE' });
+      syncErrors = [];
+      document.getElementById('statErrors').textContent = '0';
+      loadErrors();
+      showToast('✓ Error log cleared', 'success');
+    } catch (err) {
+      showToast('Failed to clear errors', 'error');
+    }
+  }
+
+  function toggleErrorLog() {
+    const log = document.getElementById('errorLog');
+    const isVisible = log.style.display !== 'none';
+    log.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) {
+      loadErrors();
+    }
+  }
+
+  // Load notifications
+  async function loadNotifications() {
+    try {
+      const res  = await fetch('/notifications?portalId=' + portalId);
+      const data = await res.json();
+      const banners = document.getElementById('notificationBanners');
+      const notifications = data.notifications || [];
+      if (!notifications.length) { banners.innerHTML = ''; return; }
+      const colors = { info: '#60a5fa', warning: '#fbbf24', error: '#f87171', success: '#4ade80' };
+      banners.innerHTML = notifications.map(n => `
+        <div class="notif-banner notif-${n.type}">
+          <div>
+            <strong style="font-size:14px">${n.title}</strong>
+            <p style="color:var(--muted);font-size:13px;margin-top:2px">${n.message}</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            ${n.action_label && n.action_url ? `<a href="${n.action_url}${n.action_url.includes('?') ? '&' : '?'}portalId=${portalId}" style="background:var(--accent);color:white;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px">${n.action_label}</a>` : ''}
+            <button onclick="dismissNotification(${n.id}, this.closest('.notif-banner'))" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px">✕</button>
+          </div>
+        </div>
+      `).join('');
+    } catch(e) {}
+  }
+
+  async function dismissNotification(id, el) {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 0.3s';
+    setTimeout(() => el.remove(), 300);
+    await fetch('/notifications/' + id + '/read', { method: 'POST' });
+  }
+
+  function render() {
+    const list     = document.getElementById('rulesList');
+    const total    = rules.length;
+    const active   = rules.filter(r => r.enabled).length;
+    const mappings = rules.reduce((sum, r) => sum + (r.mappings?.length || 0), 0);
+
+    document.getElementById('statTotal').textContent    = total;
+    document.getElementById('statActive').textContent   = active;
+    document.getElementById('statMappings').textContent = mappings;
+
+    if (total === 0) {
+      list.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">⇄</div>
+        <div class="empty-title">No sync rules yet</div>
+        <div class="empty-desc">Create your first rule to start syncing properties<br>between associated CRM objects automatically.</div>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = rules.map(rule => `
+      <div class="rule-card ${rule.enabled ? 'active' : ''}">
+        <div class="rule-header">
+          <label class="rule-toggle">
+            <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleRule('${rule.id}', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="rule-info">
+            <div class="rule-name">${rule.name || 'Unnamed rule'}</div>
+            <div class="rule-meta">
+              <span>${rule.sourceObject} → ${rule.targetObject}</span>
+              <span>${rule.direction === 'two_way' ? '⇄ Bidirectional' : '→ One-way'}</span>
+              <span>${rule.assocRule}</span>
+              <span>${rule.mappings?.length || 0} mappings</span>
+            </div>
+          </div>
+          <div class="rule-actions">
+            <button class="btn-icon" onclick="editRule('${rule.id}')" title="Edit">✎</button>
+            <button class="btn-icon delete" onclick="deleteRule('${rule.id}')" title="Delete">✕</button>
+          </div>
+        </div>
+        ${rule.mappings?.length ? `
+        <div class="rule-mappings">
+          ${rule.mappings.map(m => `
+            <div class="mapping-pill">
+              ${m.sourceLabel || m.source}
+              <span class="arrow">→</span>
+              ${m.targetLabel || m.target}
+            </div>
+          `).join('')}
+        </div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function toggleRule(id, enabled) {
+    rules = rules.map(r => r.id === id ? { ...r, enabled } : r);
+    saveRules();
+    render();
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    }).catch(() => {});
+    showToast(enabled ? '✓ Rule enabled' : 'Rule disabled', enabled ? 'success' : '');
+  }
+
+  async function deleteRule(id) {
+    if (!await syncConfirm('This sync rule will be permanently deleted.', 'Delete Rule', 'Delete')) return;
+    rules = rules.filter(r => r.id !== id);
+    saveRules();
+    render();
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    }).catch(() => {});
+    showToast('Rule deleted', '');
+  }
+
+  function editRule(id) {
+    const rule = rules.find(r => r.id === id);
+    if (!rule) return;
+    editingId = id;
+    document.getElementById('modalTitle').textContent      = 'Edit Sync Rule';
+    document.getElementById('sourceObject').value          = rule.sourceObject;
+    document.getElementById('targetObject').value          = rule.targetObject;
+    document.getElementById('assocRule').value             = rule.assocRule;
+    document.getElementById('assocLabel').value            = rule.assocLabel || '';
+    document.getElementById('syncDirection').value         = rule.direction;
+    document.getElementById('skipIfHasValue').value        = rule.skipIfHasValue || 'false';
+    document.getElementById('ruleName').value              = rule.name || '';
+    toggleLabelField();
+    loadProperties().then(() => {
+      document.getElementById('mappingsList').innerHTML = '';
+      (rule.mappings || []).forEach(m => addMappingRow(m.source, m.target));
+    });
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function openModal() {
+    editingId = null;
+    document.getElementById('modalTitle').textContent   = 'New Sync Rule';
+    document.getElementById('sourceObject').value       = '';
+    document.getElementById('targetObject').value       = '';
+    document.getElementById('assocRule').value          = 'all';
+    document.getElementById('assocLabel').value         = '';
+    document.getElementById('syncDirection').value      = 'one_way';
+    document.getElementById('skipIfHasValue').value     = 'false';
+    document.getElementById('ruleName').value           = '';
+    document.getElementById('mappingsList').innerHTML   = '';
+    document.getElementById('propsStatus').textContent  = '';
+    toggleLabelField();
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+
+  function showLimitModal(message) {
+    document.getElementById('limitModalMessage').textContent = message;
+    document.getElementById('limitModalOverlay').classList.add('open');
+  }
+
+  function closeLimitModal() {
+    document.getElementById('limitModalOverlay').classList.remove('open');
+  }
+
+  // Universal Modal Functions
+  let confirmResolve = null;
+  let alertResolve = null;
+  let promptResolve = null;
+
+  async function syncConfirm(message, title = 'Confirm Action', confirmText = 'Confirm') {
+    return new Promise((resolve) => {
+      confirmResolve = resolve;
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmMessage').textContent = message;
+      document.getElementById('confirmBtn').textContent = confirmText;
+      document.getElementById('syncConfirmModal').classList.add('open');
+    });
+  }
+
+  function closeConfirmModal(result) {
+    document.getElementById('syncConfirmModal').classList.remove('open');
+    if (confirmResolve) {
+      confirmResolve(result);
+      confirmResolve = null;
+    }
+  }
+
+  async function syncAlert(message, title = 'Notice', icon = 'ℹ️') {
+    return new Promise((resolve) => {
+      alertResolve = resolve;
+      document.getElementById('alertTitle').textContent = title;
+      document.getElementById('alertMessage').textContent = message;
+      document.getElementById('alertIcon').textContent = icon;
+      document.getElementById('syncAlertModal').classList.add('open');
+    });
+  }
+
+  function closeAlertModal() {
+    document.getElementById('syncAlertModal').classList.remove('open');
+    if (alertResolve) {
+      alertResolve();
+      alertResolve = null;
+    }
+  }
+
+  async function syncPrompt(message, title = 'Input Required', placeholder = '', defaultValue = '') {
+    return new Promise((resolve) => {
+      promptResolve = resolve;
+      document.getElementById('promptTitle').textContent = title;
+      document.getElementById('promptMessage').textContent = message;
+      const input = document.getElementById('promptInput');
+      input.placeholder = placeholder;
+      input.value = defaultValue;
+      document.getElementById('syncPromptModal').classList.add('open');
+      setTimeout(() => input.focus(), 100);
+    });
+  }
+
+  function closePromptModal(result) {
+    document.getElementById('syncPromptModal').classList.remove('open');
+    if (promptResolve) {
+      promptResolve(result);
+      promptResolve = null;
+    }
+  }
+
+  function toggleLabelField() {
+    const val = document.getElementById('assocRule').value;
+    document.getElementById('labelGroup').style.display = val === 'labeled' ? 'flex' : 'none';
+  }
+
+  async function loadProperties() {
+    const src = document.getElementById('sourceObject').value;
+    const tgt = document.getElementById('targetObject').value;
+    if (!src && !tgt) return;
+    document.getElementById('propsStatus').textContent = 'Loading...';
+    try {
+      const [srcRes, tgtRes] = await Promise.all([
+        src ? fetch('/settings/properties/' + src + '?portalId=' + portalId).then(r => r.json()) : Promise.resolve({ properties: [] }),
+        tgt ? fetch('/settings/properties/' + tgt + '?portalId=' + portalId).then(r => r.json()) : Promise.resolve({ properties: [] })
+      ]);
+      sourceProps = srcRes.properties || [];
+      targetProps = tgtRes.properties || [];
+      document.getElementById('propsStatus').textContent = sourceProps.length + ' source / ' + targetProps.length + ' target props loaded';
+      refreshMappingSelects();
+    } catch (e) {
+      document.getElementById('propsStatus').textContent = 'Could not load properties';
+    }
+  }
+
+  function buildPropOptions(props, selectedVal, filterByType) {
+    if (!props.length) return '<option value="">Select object first...</option>';
+    
+    let filtered = props;
+    
+    // Filter properties by compatible types if specified
+    if (filterByType && window.filterCompatibleProperties) {
+      filtered = window.filterCompatibleProperties(props, filterByType);
+    }
+    
+    return '<option value="">Select property...</option>' +
+      filtered.map(p => {
+        const typeName = window.getTypeName ? window.getTypeName(p.type) : p.type;
+        return `<option value="${p.name}" data-type="${p.type}" ${p.name === selectedVal ? 'selected' : ''}>${p.label} (${typeName})</option>`;
+      }).join('');
+  }
+
+  function refreshMappingSelects() {
+    document.querySelectorAll('.src-select').forEach(sel => {
+      const cur = sel.value;
+      sel.innerHTML = buildPropOptions(sourceProps, cur);
+    });
+    document.querySelectorAll('.tgt-select').forEach(sel => {
+      const cur = sel.value;
+      sel.innerHTML = buildPropOptions(targetProps, cur);
+    });
+  }
+
+  // Check if user can add more property mappings
+  async function canAddMapping() {
+    try {
+      const response = await fetch('/settings/tier?portalId=' + portalId);
+      const data = await response.json();
+      
+      const tier = data.tier || 'trial';
+      const limits = {
+        free: 999999,
+        trial: 30,
+        starter: 10,
+        pro: 30,
+        business: 100
+      };
+      
+      const tierLimit = limits[tier];
+      
+      // Count total mappings across ALL rules
+      const totalMappings = rules.reduce((sum, rule) => {
+        return sum + (rule.mappings?.length || 0);
+      }, 0);
+      
+      // Count mappings currently in the modal
+      const modalMappings = document.querySelectorAll('#mappingsList .mapping-row').length;
+      
+      if (totalMappings + modalMappings >= tierLimit) {
+        return {
+          allowed: false,
+          tier: tier,
+          limit: tierLimit,
+          current: totalMappings
+        };
+      }
+      
+      return { allowed: true };
+    } catch (err) {
+      console.error('[Mapping Limit] Error checking:', err);
+      return { allowed: true };  // Allow on error to not block users
+    }
+  }
+
+  async function checkAndAddMapping() {
+    const check = await canAddMapping();
+    
+    if (!check.allowed) {
+      // Show limit modal
+      const tierNames = {
+        trial: 'Trial',
+        starter: 'Starter',
+        pro: 'Pro',
+        business: 'Business'
+      };
+      
+      showLimitModal(`You've reached your limit of ${check.limit} property mappings on the ${tierNames[check.tier]} plan.\n\nPlease remove ${check.current - check.limit} mapping(s) or upgrade your plan to add more.`);
+      return;
+    }
+    
+    // Allowed - add the mapping
+    addMappingRow();
+  }
+
+  function addMappingRow(srcVal, tgtVal) {
+    const list = document.getElementById('mappingsList');
+    const div  = document.createElement('div');
+    div.className = 'mapping-row';
+    div.innerHTML = `
+      <select class="src-select">${buildPropOptions(sourceProps, srcVal || '')}</select>
+      <div class="mapping-arrow">→</div>
+      <select class="tgt-select">${buildPropOptions(targetProps, tgtVal || '')}</select>
+      <button class="btn-remove-mapping" onclick="this.parentElement.remove()">×</button>
+    `;
+    list.appendChild(div);
+    
+    // Add validation
+    const srcSelect = div.querySelector('.src-select');
+    const tgtSelect = div.querySelector('.tgt-select');
+    
+    // When source changes, filter target options
+    srcSelect.addEventListener('change', function() {
+      const selectedProp = sourceProps.find(p => p.name === this.value);
+      if (selectedProp && window.filterCompatibleProperties) {
+        const currentTarget = tgtSelect.value;
+        tgtSelect.innerHTML = buildPropOptions(targetProps, currentTarget, selectedProp.type);
+      }
+    });
+    
+    // When target changes, validate the mapping
+    tgtSelect.addEventListener('change', function() {
+      const srcProp = sourceProps.find(p => p.name === srcSelect.value);
+      const tgtProp = targetProps.find(p => p.name === this.value);
+      
+      if (srcProp && tgtProp && window.validateMappingUI) {
+        // Create feedback element if it doesn't exist
+        let feedback = div.querySelector('.mapping-validation');
+        if (!feedback) {
+          feedback = document.createElement('div');
+          feedback.className = 'mapping-validation';
+          div.appendChild(feedback);
+        }
+        
+        const isValid = window.validateMappingUI(srcProp, tgtProp, feedback);
+        div.classList.toggle('invalid', !isValid);
+        div.classList.toggle('valid', isValid);
+      }
+    });
+  }
+
+  function saveRule() {
+    const name           = document.getElementById('ruleName').value.trim();
+    const sourceObject   = document.getElementById('sourceObject').value;
+    const targetObject   = document.getElementById('targetObject').value;
+    const assocRule      = document.getElementById('assocRule').value;
+    const assocLabel     = document.getElementById('assocLabel').value.trim();
+    const direction      = document.getElementById('syncDirection').value;
+    const skipIfHasValue = document.getElementById('skipIfHasValue').value;
+
+    if (!sourceObject || !targetObject) {
+      showToast('Please select source and target objects', 'error');
+      return;
+    }
+
+    const rows = document.querySelectorAll('.mapping-row');
+    const mappings = [];
+    let hasInvalidMappings = false;
+
+    rows.forEach(row => {
+      const src = row.querySelector('.src-select').value;
+      const tgt = row.querySelector('.tgt-select').value;
+      
+      if (src && tgt) {
+        // Validate mapping types
+        const srcProp = sourceProps.find(p => p.name === src);
+        const tgtProp = targetProps.find(p => p.name === tgt);
+        
+        if (srcProp && tgtProp && window.areTypesCompatible) {
+          if (!window.areTypesCompatible(srcProp.type, tgtProp.type)) {
+            hasInvalidMappings = true;
+            row.classList.add('invalid');
+            return;
+          }
+        }
+        
+        const srcLabel = srcProp?.label || src;
+        const tgtLabel = tgtProp?.label || tgt;
+        mappings.push({ source: src, target: tgt, sourceLabel: srcLabel, targetLabel: tgtLabel });
+      }
+    });
+
+    // Check for invalid mappings
+    if (hasInvalidMappings) {
+      showToast('❌ Some mappings have incompatible field types', 'error');
+      return;
+    }
+
+    if (mappings.length === 0) {
+      showToast('Add at least one property mapping', 'error');
+      return;
+    }
+
+    const rule = {
+      id:           editingId || Date.now().toString(),
+      name:         name || sourceObject + ' → ' + targetObject,
+      sourceObject, targetObject, assocRule, assocLabel,
+      direction,    skipIfHasValue, mappings,
+      enabled:      editingId ? rules.find(r => r.id === editingId)?.enabled ?? true : true,
+      createdAt:    editingId ? rules.find(r => r.id === editingId)?.createdAt : new Date().toISOString()
+    };
+
+    if (editingId) {
+      rules = rules.map(r => r.id === editingId ? rule : r);
+    } else {
+      rules.push(rule);
+    }
+
+    saveRules();
+    render();
+    closeModal();
+
+    fetch('/settings/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, rules })
+    })
+    .then(async r => {
+      const data = await r.json();
+      
+      // Check if response is error (status 400+)
+      if (!r.ok) {
+        // Backend returned an error
+        if (data.message) {
+          // Tier limit error with detailed message
+          showLimitModal(data.message);
+        } else if (data.error) {
+          showToast('❌ ' + data.error, 'error');
+        } else {
+          showToast('❌ Failed to save rule', 'error');
+        }
+        
+        // Revert the rule addition/update
+        location.reload();
+        return;
+      }
+      
+      // Success case
+      if (data.validationErrors) {
+        // Server found validation errors
+        showToast('❌ ' + data.validationErrors[0].error, 'error');
+      } else if (data.validationWarnings) {
+        // Server found warnings but saved
+        showToast('⚠️ Saved with warnings: ' + data.validationWarnings[0].warning, '');
+      } else {
+        showToast(editingId ? '✓ Rule updated' : '✓ Rule saved', 'success');
+      }
+    })
+    .catch(() => {
+      showToast('❌ Network error - please try again', 'error');
+    });
+  }
+
+  function saveRules() {
+    localStorage.setItem(storageKey, JSON.stringify(rules));
+  }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'toast ' + (type || '');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  document.getElementById('limitModalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeLimitModal();
+  });
+
+  // Universal modal click-outside handlers
+  document.getElementById('syncConfirmModal').addEventListener('click', function(e) {
+    if (e.target === this) closeConfirmModal(false);
+  });
+
+  document.getElementById('syncAlertModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAlertModal();
+  });
+
+  document.getElementById('syncPromptModal').addEventListener('click', function(e) {
+    if (e.target === this) closePromptModal(null);
+  });
+
+  // Enter key support for prompt
+  document.getElementById('promptInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      closePromptModal(this.value);
+    }
+  });
+
+  // Load rules from server
+  fetch('/settings/rules?portalId=' + portalId)
+    .then(r => r.json())
+    .then(data => {
+      // ALWAYS update rules from server, even if empty array
+      rules = data.rules || [];
+      saveRules();
+      render();
+    })
+    .catch(() => render());
+
+  // Load notifications
+  loadNotifications();
+  
+  // Load available objects (including correct Projects object type ID)
+  loadAvailableObjects();
+  
+  // Load error count (with error handling to prevent crashes)
+  loadErrors().catch(err => console.log('Error loading errors:', err));
+  
+  // Auto-refresh errors every 30 seconds if error log is visible
+  setInterval(() => {
+    if (document.getElementById('errorLog').style.display !== 'none') {
+      loadErrors().catch(err => console.log('Error loading errors:', err));
+    } else {
+      // Just update the count
+      fetch('/settings/errors?portalId=' + portalId)
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('statErrors').textContent = (data.errors || []).length;
+        })
+        .catch(() => {});
+    }
+  }, 30000); // 30 seconds
+
+  // ========== PAYSTACK UPGRADE FUNCTIONS ==========
+  
+  // Upgrade to PayStack plan
+  async function upgradeToPlan(plan) {
+    const email = await syncPrompt(
+      'Please enter your email address for billing and payment notifications.',
+      'Upgrade to ' + plan.charAt(0).toUpperCase() + plan.slice(1),
+      'your@email.com'
+    );
+    
+    if (!email || !email.includes('@')) {
+      await syncAlert('Please enter a valid email address.', 'Invalid Email', '⚠️');
+      return;
+    }
+
+    try {
+      showToast('Creating checkout session...', 'info');
+
+      const response = await fetch('/api/paddle/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portalId: portalId,
+          email: email,
+          plan: plan
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.checkout_url) {
+        // Redirect to Paddle checkout
+        window.location.href = data.checkout_url;
+      } else {
+        showToast('Error: ' + (data.error || 'Failed to create checkout session'), 'error');
+      }
+    } catch (err) {
+      console.error('[Upgrade] Error:', err);
+      showToast('Error: ' + err.message, 'error');
+    }
+  }
+
+  // Check tier and show/hide upgrade section
+  let currentTier = null;
+  
+  async function checkTierAndShowUpgrade() {
+    try {
+      const response = await fetch('/settings/tier?portalId=' + portalId);
+      const data = await response.json();
+
+      const tier = data.tier || 'trial';
+      const tierName = tier.toUpperCase();
+      
+      // Detect tier change
+      if (currentTier !== null && currentTier !== tier) {
+        // Tier changed! Show notification and reload
+        const tierNames = {
+          free: 'Free',
+          trial: 'Trial',
+          starter: 'Starter',
+          pro: 'Pro',
+          business: 'Business'
+        };
+        
+        showToast(`✨ Your plan has been updated to ${tierNames[tier]}!`, 'success');
+        
+        // Reload page to refresh limits
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+      
+      currentTier = tier;
+      
+      document.getElementById('currentTierName').textContent = tierName;
+      
+      const limits = {
+        free: 999999,  // Unlimited (backend only)
+        trial: 30,
+        starter: 20,
+        pro: 30,
+        business: 100
+      };
+      document.getElementById('currentMappingLimit').textContent = limits[tier] || 30;
+
+      // Show upgrade section for TRIAL tier only (FREE is backend only)
+      if (tier === 'trial') {
+        document.getElementById('upgradeSection').style.display = 'block';
+      } else {
+        document.getElementById('upgradeSection').style.display = 'none';
+      }
+
+    } catch (err) {
+      console.error('[Upgrade] Failed to check tier:', err);
+      // Set defaults if tier check fails
+      document.getElementById('currentTierName').textContent = 'TRIAL';
+      document.getElementById('currentMappingLimit').textContent = '30';
+      document.getElementById('upgradeSection').style.display = 'block';
+    }
+  }
+
+  // Start periodic tier checking (every 30 seconds)
+  function startTierMonitoring() {
+    // Check immediately on load
+    checkTierAndShowUpgrade();
+    
+    // Then check every 30 seconds
+    setInterval(() => {
+      checkTierAndShowUpgrade();
+    }, 30000); // 30 seconds
+  }
+
+  // Call tier monitoring on page load
+  startTierMonitoring();
+
+  // ── HUBSPOT CONNECTION CHECK ──────────────────────────────────────────
+  async function checkHubSpotConnection() {
+    try {
+      if (!portalId || portalId === 'Demo') return;
+      const res  = await fetch('/api/auth/portal/connected?portalId=' + portalId);
+      const data = await res.json();
+      if (!data.connected) {
+        // Show modal popup
+        document.getElementById('hubspotModal').style.display = 'flex';
+        // Show header button
+        const btn = document.getElementById('hubspotInstallBtn');
+        if (btn) btn.style.display = 'block';
+      }
+    } catch (e) { /* silently ignore */ }
+  }
+  checkHubSpotConnection();
+
+
+
+</script>
+
+
+<!-- ── HUBSPOT CONNECT MODAL ─────────────────────────────────── -->
+<div id="hubspotModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);z-index:500;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#18181c;border:1px solid #2e2e38;border-radius:16px;max-width:460px;width:100%;padding:40px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.6);animation:syncModalSlide 0.3s ease-out">
+    <div style="font-size:52px;margin-bottom:20px">🔌</div>
+    <h2 style="font-size:22px;font-weight:600;color:#f0f0f4;margin-bottom:12px">Connect HubSpot</h2>
+    <p style="color:#8888a0;font-size:14px;line-height:1.7;margin-bottom:28px">
+      Install the SyncStation app to your HubSpot portal to start syncing property values between CRM objects.
+    </p>
+    <a href="/oauth/install" style="display:inline-block;background:#ff6b35;color:white;padding:13px 30px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;margin-bottom:16px;transition:background 0.2s">
+      🔗 Connect to HubSpot
+    </a>
+    <br>
+    <button onclick="document.getElementById('hubspotModal').style.display='none'" style="background:transparent;border:none;color:#8888a0;font-size:13px;cursor:pointer;font-family:inherit;margin-top:4px;padding:6px">
+      I'll do this later
+    </button>
+  </div>
+</div>
+
+<!-- Chat Widget -->
+<div id="syncstation-chat" style="display: none;">
+  <div class="chat-bubble" id="chatBubble">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    <span class="chat-bubble-badge" id="chatBadge">1</span>
+  </div>
+
+  <div class="chat-window" id="chatWindow">
+    <div class="chat-header">
+      <div class="chat-header-content">
+        <div class="chat-logo">⇄</div>
+        <div>
+          <div class="chat-title">SyncStation Support</div>
+          <div class="chat-subtitle">Usually replies instantly</div>
+        </div>
+      </div>
+      <button class="chat-close" id="chatClose">✕</button>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-message bot">
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+          <div class="message-text">Hi! I'm here to help with SyncStation. Ask me about sync rules, pricing, troubleshooting, or anything else!</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-container">
+      <textarea 
+        class="chat-input" 
+        id="chatInput" 
+        placeholder="Type your message..."
+        rows="1"
+      ></textarea>
+      <button class="chat-send" id="chatSend">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+
+    <div class="chat-loader" id="chatLoader" style="display: none;">
+      <div class="loader-dot"></div>
+      <div class="loader-dot"></div>
+      <div class="loader-dot"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+#syncstation-chat {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10000;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.chat-bubble {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b35, #ffb347);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  position: relative;
+}
+
+.chat-bubble:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+}
+
+.chat-bubble-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #f87171;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #0f0f11;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.chat-window {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  width: 380px;
+  height: 600px;
+  max-height: calc(100vh - 140px);
+  background: #18181c;
+  border: 1px solid #2e2e38;
+  border-radius: 16px;
+  display: none;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.chat-window.open {
+  display: flex;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-checkHubSpotConnection();
+.chat-header {
+  padding: 20px;
+  border-bottom: 1px solid #2e2e38;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(255, 179, 71, 0.1));
+}
+
+.chat-header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-logo {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #ff6b35, #ffb347);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.chat-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f0f0f4;
+}
+
+.chat-subtitle {
+  font-size: 12px;
+  color: #8888a0;
+}
+
+.chat-close {
+  background: none;
+  border: none;
+  color: #8888a0;
+  font-size: 20px;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.chat-close:hover {
+  background: #0f0f11;
+  color: #f0f0f4;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #2e2e38;
+  border-radius: 3px;
+}
+
+.chat-message {
+  display: flex;
+  gap: 12px;
+  animation: messageIn 0.3s ease-out;
+}
+
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-message.user {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #0f0f11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.chat-message.user .message-avatar {
+  background: linear-gradient(135deg, #ff6b35, #ffb347);
+}
+
+.message-content {
+  max-width: 75%;
+}
+
+.message-text {
+  background: #0f0f11;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #f0f0f4;
+}
+
+.chat-message.user .message-text {
+  background: linear-gradient(135deg, #ff6b35, #ffb347);
+  color: white;
+}
+
+.chat-input-container {
+  padding: 16px 20px;
+  border-top: 1px solid #2e2e38;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.chat-input {
+  flex: 1;
+  background: #0f0f11;
+  border: 1px solid #2e2e38;
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #f0f0f4;
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  max-height: 120px;
+  transition: border-color 0.2s;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: #ff6b35;
+}
+
+.chat-input::placeholder {
+  color: #8888a0;
+}
+
+.chat-send {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ff6b35, #ffb347);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.chat-send:hover {
+  transform: scale(1.05);
+}
+
+.chat-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.chat-loader {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 12px 20px;
+  background: #0f0f11;
+  border-radius: 20px;
+  border: 1px solid #2e2e38;
+}
+
+.loader-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8888a0;
+  animation: bounce 1.4s infinite ease-in-out;
+}
+
+.loader-dot:nth-child(1) { animation-delay: -0.32s; }
+.loader-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+@media (max-width: 480px) {
+  .chat-window {
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+</style>
+
+<script>
+(function() {
+  // Initialize chat
+  const chatContainer = document.getElementById('syncstation-chat');
+  const chatBubble = document.getElementById('chatBubble');
+  const chatWindow = document.getElementById('chatWindow');
+  const chatClose = document.getElementById('chatClose');
+  const chatInput = document.getElementById('chatInput');
+  const chatSend = document.getElementById('chatSend');
+  const chatMessages = document.getElementById('chatMessages');
+  const chatLoader = document.getElementById('chatLoader');
+  const chatBadge = document.getElementById('chatBadge');
+
+  // Get portal ID from URL or localStorage
+  const urlParams = new URLSearchParams(window.location.search);
+  const portalId = urlParams.get('portalId') || localStorage.getItem('portalId');
+
+  // Generate or retrieve session ID
+  let sessionId = localStorage.getItem('chat_session_id');
+  if (!sessionId) {
+    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('chat_session_id', sessionId);
+  }
+
+  // Show chat widget
+  chatContainer.style.display = 'block';
+
+  // Toggle chat window
+  chatBubble.addEventListener('click', () => {
+    chatWindow.classList.add('open');
+    chatBubble.style.display = 'none';
+    chatInput.focus();
+    chatBadge.style.display = 'none';
+  });
+
+  chatClose.addEventListener('click', () => {
+    chatWindow.classList.remove('open');
+    chatBubble.style.display = 'flex';
+  });
+
+  // Auto-resize textarea
+  chatInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
+  // Send message on Enter (but allow Shift+Enter for new line)
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  chatSend.addEventListener('click', sendMessage);
+
+  async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+
+    // Add user message to UI
+    addMessage('user', message);
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+
+    // Disable input while processing
+    chatInput.disabled = true;
+    chatSend.disabled = true;
+    chatLoader.style.display = 'flex';
+
+    try {
+      const response = await fetch('/api/chatbot/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          sessionId,
+          portalId
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.response) {
+        addMessage('bot', data.response);
+      } else {
+        addMessage('bot', 'Sorry, I encountered an error. Please try again or contact support@syncstation.app');
+      }
+
+    } catch (err) {
+      console.error('Chat error:', err);
+      addMessage('bot', 'Sorry, I couldn\'t process that. Please try again.');
+    } finally {
+      chatInput.disabled = false;
+      chatSend.disabled = false;
+      chatLoader.style.display = 'none';
+      chatInput.focus();
+    }
+  }
+
+  function addMessage(type, text) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${type}`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.textContent = type === 'user' ? '👤' : '🤖';
+    
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    
+    const messageText = document.createElement('div');
+    messageText.className = 'message-text';
+    messageText.innerHTML = formatMessage(text);
+    
+    content.appendChild(messageText);
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function formatMessage(text) {
+    // Convert markdown-style links to HTML
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #ff6b35; text-decoration: underline;" target="_blank">$1</a>');
+    
+    // Convert line breaks
+    text = text.replace(/\n/g, '<br>');
+    
+    // Convert bullet points
+    text = text.replace(/^- (.+)$/gm, '• $1');
+    
+    return text;
+  }
+
+  // Load previous conversation
+  async function loadHistory() {
+    try {
+      const response = await fetch(`/api/chatbot/history/${sessionId}`);
+      const data = await response.json();
+      
+      if (data.messages && data.messages.length > 1) {
+        // Clear welcome message
+        chatMessages.innerHTML = '';
+        
+        // Add all messages
+        data.messages.forEach(msg => {
+          addMessage(msg.type === 'user' ? 'user' : 'bot', msg.content);
+        });
+      }
+    } catch (err) {
+      console.log('Could not load chat history');
+    }
+  }
+
+  loadHistory();
+})();
 </script>
+
+</body>
+</html>
