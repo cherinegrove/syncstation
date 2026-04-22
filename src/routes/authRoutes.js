@@ -1,73 +1,257 @@
-<!-- ============================================================
-     HUBSPOT INSTALL BANNER
-     Add this HTML right after the opening <div class="main"> tag
-     in src/public/settings.html
-     ============================================================ -->
+// =====================================================
+// AUTHENTICATION & USER MANAGEMENT ROUTES
+// =====================================================
 
-<!-- Not-connected banner — hidden by default, shown via JS -->
-<div id="hubspotConnectBanner" style="display:none;background:linear-gradient(135deg,rgba(255,107,53,0.12),rgba(255,179,71,0.08));border:1px solid rgba(255,107,53,0.4);border-radius:12px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
-  <div style="display:flex;align-items:center;gap:14px">
-    <div style="font-size:32px;flex-shrink:0">🔌</div>
-    <div>
-      <div style="font-weight:600;font-size:15px;margin-bottom:4px">HubSpot not connected</div>
-      <div style="color:var(--muted);font-size:13px">Install the SyncStation app to your HubSpot portal to start syncing properties.</div>
-    </div>
-  </div>
-  <a href="/oauth/install" style="background:var(--accent);color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap;flex-shrink:0">
-    🔗 Connect to HubSpot
-  </a>
-</div>
+const express = require('express');
+const router  = express.Router();
+const authService            = require('../services/authService');
+const userManagementService  = require('../services/userManagementService');
+const emailService           = require('../services/emailService_auth');
 
+// ── AUTH MIDDLEWARE ───────────────────────────────────────────────────────────
 
-<!-- ============================================================
-     INSTALL BUTTON near "Add sync rule" button
-     Replace the existing btn-add button with this version
-     that includes the install button alongside it.
-     
-     Find this line in settings.html:
-       <button class="btn-add" onclick="openModal()">
-     
-     Replace the entire btn-add button AND add the install button:
-     ============================================================ -->
-
-<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-  <button class="btn-add" onclick="openModal()" style="flex:1;min-width:200px">
-    <span style="font-size:18px">+</span> Add sync rule
-  </button>
-  <a href="/oauth/install" id="installHubspotBtn" style="display:none;padding:12px 20px;background:var(--surface);border:2px dashed rgba(255,107,53,0.5);border-radius:var(--radius);color:var(--accent);text-decoration:none;font-size:14px;white-space:nowrap;transition:all 0.2s">
-    🔗 Install to HubSpot
-  </a>
-</div>
-
-
-<!-- ============================================================
-     JAVASCRIPT — Add this inside the <script> tag in settings.html
-     Paste it right after the line:  loadNotifications();
-     ============================================================ -->
-<script>
-// Check if HubSpot is connected and show banner/button if not
-async function checkHubSpotConnection() {
-  try {
-    const res  = await fetch('/settings/tier?portalId=' + portalId);
-    const data = await res.json();
-
-    // If tier fetch fails or returns no token indicator, check directly
-    const tokenRes  = await fetch('/api/portal/connected?portalId=' + portalId);
-    const tokenData = await tokenRes.json();
-
-    if (!tokenData.connected) {
-      // Show the top banner
-      const banner = document.getElementById('hubspotConnectBanner');
-      if (banner) banner.style.display = 'flex';
-
-      // Show the install button next to "Add sync rule"
-      const btn = document.getElementById('installHubspotBtn');
-      if (btn) btn.style.display = 'block';
+async function requireAuth(req, res, next) {
+    try {
+        const sessionToken = req.headers.authorization?.replace('Bearer ', '') ||
+                             req.cookies?.sessionToken;
+        if (!sessionToken) return res.status(401).json({ error: 'Authentication required' });
+        const session = await authService.verifySession(sessionToken);
+        req.user = session;
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: err.message });
     }
-  } catch (e) {
-    // Silently fail — don't block the page if this check errors
-  }
 }
 
-checkHubSpotConnection();
-</script>
+function requirePortalRole(requiredRole = 'user') {
+    return async (req, res, next) => {
+        try {
+            const portalId = req.params.portalId || req.body.portalId || req.user.portalId;
+            if (!portalId) return res.status(400).json({ error: 'Portal ID required' });
+
+            const hasPermission = await userManagementService.checkPermission(
+                req.user.userId, portalId, requiredRole
+            );
+            if (!hasPermission) return res.status(403).json({ error: `${requiredRole} access required` });
+
+            req.portalId = portalId;
+            next();
+        } catch (err) {
+            return res.status(500).json({ error: err.message });
+        }
+    };
+}
+
+// ── PUBLIC ROUTES ─────────────────────────────────────────────────────────────
+
+// POST /api/auth/register
+router.post('/register', async (req, res) => {
+    try {
+        const { email, password, fullName, portalId } = req.body;
+        if (!email || !password || !fullName || !portalId) {
+            return res.status(400).json({ error: 'All fields are required' });
+        }
+
+        const existingUsers = await userManagementService.getPortalUsers(portalId);
+        const hasOwner      = existingUsers.some(u => u.role === 'owner');
+        if (hasOwner) {
+            return res.status(400).json({ error: 'This portal already has an owner. Please contact them for access.' });
+        }
+
+        const result = await authService.registerUser(email, password, fullName, portalId, 'owner');
+
+        try {
+            await emailService.sendVerificationEmail(result.user.email, result.user.full_name, result.verificationToken);
+        } catch (e) {
+            console.error('Failed to send verification email:', e.message);
+        }
+
+        res.json({
+            success: true,
+            message: 'Registration successful. Please check your email to verify your account.',
+            user: result.user
+        });
+    } catch (err) {
+        console.error('Registration error:', err);
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// POST /api/auth/login
+router.post('/login', async (req, res) => {
+    try {
+        const { email, password, portalId } = req.body;
+        if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+
+        const result = await authService.login(email, password, portalId);
+
+        res.cookie('sessionToken', result.sessionToken, {
+            httpOnly: true,
+            secure:   process.env.NODE_ENV === 'production',
+            maxAge:   7 * 24 * 60 * 60 * 1000,
+            sameSite: 'strict'
+        });
+
+        res.json({
+            success:      true,
+            user:         result.user,
+            portals:      result.portals,
+            sessionToken: result.sessionToken
+        });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(401).json({ error: err.message });
+    }
+});
+
+// POST /api/auth/logout
+router.post('/logout', requireAuth, async (req, res) => {
+    try {
+        const sessionToken = req.headers.authorization?.replace('Bearer ', '') || req.cookies?.sessionToken;
+        await authService.logout(sessionToken);
+        res.clearCookie('sessionToken');
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Email is required' });
+
+        const result = await authService.requestPasswordReset(email);
+
+        if (result.user) {
+            try {
+                await emailService.sendPasswordResetEmail(result.user.email, result.user.full_name, result.resetToken);
+            } catch (e) {
+                console.error('Failed to send reset email:', e.message);
+            }
+        }
+
+        res.json({ success: true, message: 'If an account exists with this email, a password reset link has been sent.' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to process request' });
+    }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
+        if (newPassword.length < 8)  return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+        await authService.resetPassword(token, newPassword);
+        res.json({ success: true, message: 'Password reset successfully.' });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// GET /api/auth/verify-email/:token
+router.get('/verify-email/:token', async (req, res) => {
+    try {
+        await authService.verifyEmail(req.params.token);
+        res.json({ success: true, message: 'Email verified successfully!' });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// ── PROTECTED ROUTES ──────────────────────────────────────────────────────────
+
+// GET /api/auth/me
+router.get('/me', requireAuth, async (req, res) => {
+    try {
+        const portals = await userManagementService.getUserPortals(req.user.userId);
+        res.json({ user: req.user, portals });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/users/portal/:portalId
+router.get('/portal/:portalId', requireAuth, requirePortalRole('user'), async (req, res) => {
+    try {
+        const users = await userManagementService.getPortalUsers(req.portalId);
+        res.json({ users });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/users/invite
+router.post('/invite', requireAuth, requirePortalRole('admin'), async (req, res) => {
+    try {
+        const { email, fullName, portalId, role } = req.body;
+        if (!email || !fullName || !portalId || !role) return res.status(400).json({ error: 'All fields are required' });
+        if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+
+        const result = await userManagementService.inviteUser(email, fullName, portalId, role, req.user.userId);
+
+        try {
+            if (result.isNewUser) {
+                await emailService.sendInvitationEmail(email, fullName, req.user.fullName, portalId, result.tempPassword, result.verificationToken);
+            } else {
+                await emailService.sendPortalAccessEmail(email, fullName, req.user.fullName, portalId, role);
+            }
+        } catch (e) {
+            console.error('Failed to send invitation email:', e.message);
+        }
+
+        res.json({ success: true, message: result.isNewUser ? 'User invited successfully.' : 'User added to portal.', userId: result.userId });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// PUT /api/users/:userId/role
+router.put('/:userId/role', requireAuth, requirePortalRole('owner'), async (req, res) => {
+    try {
+        const { portalId, role } = req.body;
+        if (!portalId || !role) return res.status(400).json({ error: 'Portal ID and role are required' });
+        if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+
+        await userManagementService.updateUserRole(parseInt(req.params.userId), portalId, role, req.user.userId);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// DELETE /api/users/:userId
+router.delete('/:userId', requireAuth, requirePortalRole('admin'), async (req, res) => {
+    try {
+        const { portalId } = req.body;
+        if (!portalId) return res.status(400).json({ error: 'Portal ID is required' });
+
+        await userManagementService.removeUser(parseInt(req.params.userId), portalId, req.user.userId);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// ── PORTAL CONNECTED CHECK ────────────────────────────────────────────────────
+
+// GET /api/portal/connected?portalId=xxx
+// Used by settings.html to check if HubSpot OAuth token exists
+router.get('/portal/connected', async (req, res) => {
+    try {
+        const { portalId } = req.query;
+        if (!portalId) return res.status(400).json({ error: 'portalId required' });
+
+        const tokenStore = require('../services/tokenStore');
+        const token      = await tokenStore.get(portalId);
+
+        res.json({ connected: !!(token && token.access_token) });
+    } catch (err) {
+        res.json({ connected: false });
+    }
+});
+
+module.exports = router;
