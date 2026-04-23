@@ -1,9 +1,5 @@
-// =====================================================
-// SYNCSTATION MAIN SERVER
-// =====================================================
-
-const express = require('express');
-const path    = require('path');
+const express      = require('express');
+const path         = require('path');
 const cookieParser = require('cookie-parser');
 const session      = require('express-session');
 
@@ -73,7 +69,6 @@ app.use('/account',       accountRoutes);
 
 // ── PAGE ROUTES ───────────────────────────────────────────────────────────────
 
-// FIX: was incorrectly serving account.html — now serves settings.html
 app.get('/settings', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'public', 'settings.html'));
 });
@@ -82,13 +77,14 @@ app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'public', 'admin.html'));
 });
 
-app.get('/login',           (req, res) => res.redirect('/login.html'));
-app.get('/register',        (req, res) => res.redirect('/register.html'));
-app.get('/forgot-password', (req, res) => res.redirect('/forgot-password.html'));
-app.get('/reset-password',  (req, res) => res.redirect('/reset-password.html'));
-app.get('/user-management', (req, res) => res.redirect('/user-management.html'));
+// Serve HTML pages directly (not as redirects to .html — avoids static file conflicts)
+app.get('/login',           (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'login.html')));
+app.get('/register',        (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'register.html')));
+app.get('/forgot-password', (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'forgot-password.html')));
+app.get('/reset-password',  (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'reset-password.html')));
+app.get('/user-management', (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'user-management.html')));
 
-// Email verification
+// Email verification page
 app.get('/verify-email', (req, res) => {
     const token = req.query.token;
     if (!token) return res.status(400).send('Verification token is required');
@@ -97,17 +93,17 @@ app.get('/verify-email', (req, res) => {
 <style>
   body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:linear-gradient(135deg,#667eea,#764ba2)}
   .box{background:white;padding:40px;border-radius:12px;text-align:center;max-width:400px}
-  h1{color:#2563eb}.spinner{border:4px solid #f3f3f3;border-top:4px solid #2563eb;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:20px auto}
+  h1{color:#2563eb}
+  .spinner{border:4px solid #f3f3f3;border-top:4px solid #2563eb;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:20px auto}
   @keyframes spin{to{transform:rotate(360deg)}}
   a{display:inline-block;margin-top:20px;padding:12px 30px;background:#2563eb;color:white;text-decoration:none;border-radius:8px;font-weight:600}
-  p{color:#6b7280}
 </style></head>
 <body><div class="box"><h1>SyncStation</h1><div class="spinner"></div><p>Verifying your email...</p></div>
 <script>
-  fetch('/api/auth/verify-email/${token}').then(r=>r.json()).then(data=>{
-    if(data.success){document.querySelector('.box').innerHTML='<div style="font-size:64px;color:#10b981">✅</div><h1>Email Verified!</h1><p>Your email has been verified. You can now log in.</p><a href="/login">Go to Login</a>';}
+  fetch('/api/auth/verify-email?token=${token}').then(r=>r.json()).then(data=>{
+    if(data.success){document.querySelector('.box').innerHTML='<div style="font-size:64px;color:#10b981">&#x2705;</div><h1>Email Verified!</h1><p>Your email has been verified. You can now log in.</p><a href="/login">Go to Login</a>';}
     else throw new Error(data.error||'Verification failed');
-  }).catch(err=>{document.querySelector('.box').innerHTML='<div style="font-size:64px;color:#ef4444">❌</div><h1>Verification Failed</h1><p>'+err.message+'</p><a href="/login">Go to Login</a>';});
+  }).catch(err=>{document.querySelector('.box').innerHTML='<div style="font-size:64px;color:#ef4444">&#x274c;</div><h1>Verification Failed</h1><p>'+err.message+'</p><a href="/login">Go to Login</a>';});
 </script></body></html>`);
 });
 
