@@ -277,6 +277,22 @@ router.post('/rules', async (req, res) => {
     
     await saveRules(portalId, rules || []);
     console.log(`[Settings] Saved ${rules?.length || 0} rules for portal ${portalId}`);
+
+    // Auto-sync webhooks after saving rules
+    try {
+      const webhookManager = require('../services/webhookManager');
+      const tokenStore     = require('../services/tokenStore');
+      const allTokens      = await tokenStore.getAll();
+      const allRules       = {};
+      for (const pid of Object.keys(allTokens)) {
+        allRules[pid] = await getRules(pid);
+      }
+      await webhookManager.syncSubscriptions(allRules);
+      console.log(`[Settings] Webhooks synced for portal ${portalId}`);
+    } catch (webhookErr) {
+      console.error('[Settings] Webhook sync error (non-fatal):', webhookErr.message);
+    }
+
     res.json({ 
       ok: true,
       validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined
@@ -286,6 +302,22 @@ router.post('/rules', async (req, res) => {
     console.error('[Settings] Error saving rules:', err.message);
     // Fall back to saving without validation if validation fails
     await saveRules(portalId, rules || []);
+
+    // Auto-sync webhooks after saving rules
+    try {
+      const webhookManager = require('../services/webhookManager');
+      const tokenStore     = require('../services/tokenStore');
+      const allTokens      = await tokenStore.getAll();
+      const allRules       = {};
+      for (const pid of Object.keys(allTokens)) {
+        allRules[pid] = await getRules(pid);
+      }
+      await webhookManager.syncSubscriptions(allRules);
+      console.log(`[Settings] Webhooks synced for portal ${portalId}`);
+    } catch (webhookErr) {
+      console.error('[Settings] Webhook sync error (non-fatal):', webhookErr.message);
+    }
+
     res.json({ 
       ok: true,
       warning: 'Rules saved but validation could not be performed'
