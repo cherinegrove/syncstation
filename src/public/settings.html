@@ -2115,8 +2115,8 @@
       };
       document.getElementById('currentMappingLimit').textContent = limits[tier] || 30;
 
-      // Show upgrade section for TRIAL tier only (FREE is backend only)
-      if (tier === 'trial') {
+      // Show upgrade section only when trial is expired
+      if (tier === 'trial' && (data.trialDaysLeft <= 0 || !data.trialDaysLeft)) {
         document.getElementById('upgradeSection').style.display = 'block';
       } else {
         document.getElementById('upgradeSection').style.display = 'none';
@@ -2127,7 +2127,7 @@
       // Set defaults if tier check fails
       document.getElementById('currentTierName').textContent = 'TRIAL';
       document.getElementById('currentMappingLimit').textContent = '30';
-      document.getElementById('upgradeSection').style.display = 'block';
+      document.getElementById('upgradeSection').style.display = 'none';
     }
   }
 
