@@ -167,9 +167,11 @@
 
 <script>
   const urlParams = new URLSearchParams(window.location.search);
-  const portalId  = urlParams.get('portalId');
+  const portalId  = urlParams.get('portalId') || localStorage.getItem('syncstation_portal_id') || '';
 
-  document.getElementById('portalBadge').textContent = 'Portal ' + portalId;
+  if (portalId) localStorage.setItem('syncstation_portal_id', portalId);
+
+  document.getElementById('portalBadge').textContent = 'Portal ' + (portalId || '—');
   document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
   document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
 
