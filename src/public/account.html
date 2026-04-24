@@ -219,7 +219,7 @@
       document.getElementById('planCard').className = 'plan-card ' + (isExpired ? 'expired' : currentTier);
       document.getElementById('planName').textContent = isExpired ? 'Trial Expired' : tierInfo.name;
       document.getElementById('planDesc').textContent = tierInfo.desc || '';
-      document.getElementById('planPrice').textContent = currentTier === 'trial' ? 'Free' : '$' + tierInfo.price;
+      document.getElementById('planPrice').textContent = currentTier === 'trial' ? '7-Day Trial' : '$' + tierInfo.price;
 
       // Dates
       const trialStart  = tierRes.trial_started_at;
