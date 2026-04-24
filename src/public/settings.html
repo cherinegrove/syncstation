@@ -2116,7 +2116,7 @@
       document.getElementById('currentMappingLimit').textContent = limits[tier] || 30;
 
       // Show upgrade section only when trial is expired
-      if (tier === 'trial' && (data.trialDaysLeft <= 0 || !data.trialDaysLeft)) {
+      if (tier === 'trial' && data.isExpired) {
         document.getElementById('upgradeSection').style.display = 'block';
       } else {
         document.getElementById('upgradeSection').style.display = 'none';
