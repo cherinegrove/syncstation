@@ -165,7 +165,7 @@
   document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
 
   const TIERS = {
-    trial:    { name: 'Free Trial',  price: 0,     maxMappings: 30,  desc: '30-day free trial' },
+    trial:    { name: 'Free Trial',  price: 0,     maxMappings: 30,  desc: '7-day free trial' },
     starter:  { name: 'Starter',     price: 10,   maxMappings: 20,  desc: 'Perfect for small teams' },
     pro:      { name: 'Pro',         price: 15,   maxMappings: 30,  desc: 'For growing businesses' },
     business: { name: 'Business',    price: 40,   maxMappings: 100, desc: 'For agencies & enterprise' }
@@ -223,7 +223,7 @@
 
       // Dates
       const trialStart  = tierRes.trial_started_at;
-      const trialExpiry = trialStart ? new Date(new Date(trialStart).getTime() + 14 * 86400000) : null;
+     const trialExpiry = trialStart ? new Date(new Date(trialStart).getTime() + 7 * 86400000) : null;
 
       let countdownHtml = '';
       if (currentTier === 'trial') {
