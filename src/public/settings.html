@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SyncStation — Sync Rules</title>
@@ -10,16 +12,16 @@
 <script src="/js/fieldTypeValidation.js"></script>
 <style>
   :root {
-    --bg: #0f0f11;
+    --bg: #0F0F11;
     --surface: #18181c;
     --surface2: #222228;
-    --border: #2e2e38;
-    --accent: #ff6b35;
-    --accent2: #ffb347;
-    --text: #f0f0f4;
-    --muted: #8888a0;
-    --success: #4ade80;
-    --error: #f87171;
+    --border: #343543;
+    --accent: #FF6B35;
+    --accent2: #A31256 ;
+    --text: #F0F0F4;
+    --muted: #A9AAB6;
+    --success: #3FD089;
+    --error: #FF5468;
     --radius: 10px;
   }
 
@@ -464,7 +466,7 @@
     color: white;
   }
 
-  .btn-primary:hover { background: #ff8555; }
+  .btn-primary:hover { background: #FF8555; box-shadow: 0 4px 8px rgba(255, 107, 53, 0.3); }
 
   .empty-state {
     text-align: center;
@@ -538,11 +540,11 @@
     margin-bottom: 16px;
   }
 
-  .sync-modal-warning { color: #fb923c; }
-  .sync-modal-info { color: #60a5fa; }
-  .sync-modal-input { color: #a78bfa; }
-  .sync-modal-success { color: #4ade80; }
-  .sync-modal-error { color: #f87171; }
+  .sync-modal-warning { color: #EE8E5A; }
+  .sync-modal-info { color: #60A5FA; }
+  .sync-modal-input { color: #A78BFA; }
+  .sync-modal-success { color: #4ADE80; }
+  .sync-modal-error { color: #FF5468; }
 
   .sync-modal-title {
     font-size: 20px;
@@ -768,8 +770,8 @@
     gap: 12px;
   }
 
-  .notif-info    { border-left: 3px solid #60a5fa; }
-  .notif-warning { border-left: 3px solid #fbbf24; }
+  .notif-info    { border-left: 3px solid #60A5FA; }
+  .notif-warning { border-left: 3px solid #EE8E5A; }
   .notif-error   { border-left: 3px solid var(--error); }
   .notif-success { border-left: 3px solid var(--success); }
   
@@ -1022,7 +1024,7 @@
 
 <div class="header">
   <div class="logo">
-    <div class="logo-icon">⇄</div>
+    <div class="logo-icon"><img src="/images/icon.webp" alt="SS" style="width:32px;height:32px;border-radius:8px;"></div>
     SyncStation
   </div>
   <nav class="header-nav">
