@@ -113,6 +113,7 @@
   <nav class="header-nav">
     <a id="navSettings" href="#">Sync Rules</a>
     <a id="navAccount" href="#" class="active">Account</a>
+    <a id="navTeam" href="#">Team</a>
   </nav>
   <div class="portal-badge" id="portalBadge">Loading...</div>
 </div>
@@ -174,6 +175,7 @@
   document.getElementById('portalBadge').textContent = 'Portal ' + (portalId || '—');
   document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
   document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
+  document.getElementById('navTeam').href     = '/user-management?portalId=' + portalId;
 
   const TIERS = {
     trial:    { name: 'Free Trial',  price: 0,     maxMappings: 30,  desc: '7-day free trial' },
