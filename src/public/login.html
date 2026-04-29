@@ -1,10 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" type="image/png" href="/images/favicon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In - SyncStation</title>
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
     <style>
         * {
             margin: 0;
@@ -21,6 +25,13 @@
             justify-content: center;
             padding: 20px;
         }
+
+        h1 {
+            color: #F0F0F4;
+            font-size: 20px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
         
         .login-container {
             background:#18181C;
@@ -34,17 +45,8 @@
         .logo {
             text-align: center;
             margin-bottom: 30px;
-        }
-        
-        .logo h1 {
-            color:#FF6B35;
-            font-size: 32px;
-            margin-bottom: 8px;
-        }
-        
-        .logo p {
-            color: #F0F0F4;
-            font-size: 14px;
+            width: 180px;
+            height: 134px;
         }
         
         .form-group {
@@ -54,8 +56,8 @@
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            color: #A9AAB6;
-            font-weight: 400;
+            color: #E8E8ED;
+            font-weight: 500;
             font-size: 14px;
         }
         
@@ -128,13 +130,14 @@
         .links a {
             color: #FF6B35;
             text-decoration: none;
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 500;
             transition: color 0.3s;
         }
         
         .links a:hover {
             color: #FF8555;
-            text-decoration: underline;
+            text-decoration: none;
         }
         
         .divider {
@@ -171,9 +174,8 @@
 <body>
     <div class="login-container">
         <div class="logo">
-            <img src="/images/icon.webp" alt="SyncStation" onerror="this.style.display='none'" style="width:56px;height:56px;border-radius:12px;margin-bottom:12px;">
-            <h1>SyncStation</h1>
-            <p>Sign in to your account</p>
+            <img src="/images/SyncStation-Centred@2x.webp" alt="SyncStation" onerror="this.style.display='none'" >
+            <h1>Sign in to your SyncStation account</h1>
         </div>
 
         <div id="alertContainer"></div>
@@ -186,7 +188,7 @@
             <div class="form-group">
                 <label for="password">
                     Password
-                    <a href="/forgot-password" style="float:right;font-weight:400;color:#2563eb;font-size:12px">Forgot password?</a>
+                    <a href="/forgot-password" style="float:right;" >Forgot password?</a>
                 </label>
                 <input type="password" id="password" required placeholder="Your password">
             </div>
