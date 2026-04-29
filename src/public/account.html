@@ -160,10 +160,10 @@
     <!-- Contact Support -->
     <div style="padding:20px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;gap:16px">
       <div>
-        <div style="font-weight:600;margin-bottom:4px;color:var(--text)">Contact Support</div>
+        <div style="font-weight:600;margin-bottom:4px;color:var(--text)">Contact Us</div>
         <div style="color:var(--muted);font-size:13px">We typically respond within 24 hours.</div>
       </div>
-      <a href="mailto:support@syncstation.app" style="background:rgba(255,107,53,0.15);border:1px solid rgba(255,107,53,0.4);color:var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none;white-space:nowrap">✉️ Email Us</a>
+      <button onclick="document.getElementById('contactModal').classList.add('open')" style="background:rgba(255,107,53,0.15);border:1px solid rgba(255,107,53,0.4);color:var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap">✉️ Contact Us</button>
     </div>
 
     <!-- Cancel Subscription -->
@@ -178,6 +178,69 @@
       <div id="cancelMsg" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(63,208,137,0.1);border:1px solid rgba(63,208,137,0.3);border-radius:8px;font-size:14px;color:var(--success)"></div>
     </div>
 
+  </div>
+</div>
+
+<!-- Contact Us Modal -->
+<div class="modal-overlay" id="contactModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">Contact Support</div>
+    <div class="modal-subtitle">Fill in the form below and we'll get back to you within 24 hours.</div>
+    <div class="error-box" id="contactErrorBox"></div>
+    <div id="contactSuccessBox" style="display:none;background:rgba(63,208,137,0.1);border:1px solid rgba(63,208,137,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:14px;color:var(--success)">
+      ✅ Message sent! We'll be in touch within 24 hours.
+    </div>
+    <div id="contactFormFields">
+      <div style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:6px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px">First Name</label>
+        <input type="text" id="contactName" placeholder="Jane" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:6px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px">Email Address</label>
+        <input type="email" id="contactEmail" placeholder="you@company.com" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:6px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px">Message</label>
+        <textarea id="contactMessage" rows="5" placeholder="Describe your question or issue..." style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeContactModal()">Cancel</button>
+      <button class="btn btn-primary" id="contactSubmitBtn" onclick="submitContact()">Send Message</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Contact Support Modal -->
+<div class="modal-overlay" id="contactModalOverlay" style="display:none;align-items:center;justify-content:center;">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">Contact Support</div>
+    <div class="modal-subtitle">We typically respond within 24 hours.</div>
+    <div class="error-box" id="contactErrorBox" style="background:rgba(255,84,104,0.1);border:1px solid rgba(255,84,104,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:14px;color:var(--error);display:none;"></div>
+    <div id="contactSuccessBox" style="display:none;background:rgba(63,208,137,0.1);border:1px solid rgba(63,208,137,0.3);border-radius:8px;padding:16px;text-align:center;">
+      <div style="font-size:32px;margin-bottom:8px">✅</div>
+      <div style="font-weight:600;color:var(--success);margin-bottom:4px">Message Sent!</div>
+      <div style="font-size:13px;color:var(--muted)">We'll get back to you within 24 hours.</div>
+    </div>
+    <div id="contactFormFields">
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:6px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px">First Name</label>
+        <input type="text" id="contactName" placeholder="Jane" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:6px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px">Email Address</label>
+        <input type="email" id="contactEmail" placeholder="you@company.com" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label style="display:block;margin-bottom:6px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px">How can we help?</label>
+        <textarea id="contactMessage" placeholder="Describe your issue or question..." rows="5" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;resize:vertical;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" id="contactFooter">
+      <button class="btn btn-secondary" onclick="closeContactModal()">Cancel</button>
+      <button class="btn btn-primary" id="contactSubmitBtn" onclick="submitContact()">Send Message</button>
+    </div>
   </div>
 </div>
 
@@ -478,7 +541,162 @@
     }, 30000); // 30 seconds
   }
 
+
+  // ── LOGOUT ──────────────────────────────────────────────────────────────────
+  function closeContactModal() {
+    document.getElementById('contactModal').classList.remove('open');
+    document.getElementById('contactName').value = '';
+    document.getElementById('contactEmail').value = '';
+    document.getElementById('contactMessage').value = '';
+    document.getElementById('contactErrorBox').style.display = 'none';
+    document.getElementById('contactSuccessBox').style.display = 'none';
+    document.getElementById('contactFormFields').style.display = 'block';
+    document.getElementById('contactSubmitBtn').style.display = 'inline-block';
+  }
+
+  async function submitContact() {
+    const name    = document.getElementById('contactName').value.trim();
+    const email   = document.getElementById('contactEmail').value.trim();
+    const message = document.getElementById('contactMessage').value.trim();
+    const errBox  = document.getElementById('contactErrorBox');
+    const btn     = document.getElementById('contactSubmitBtn');
+
+    errBox.style.display = 'none';
+
+    if (!name || !email || !message) {
+      errBox.textContent = 'Please fill in all fields.';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errBox.textContent = 'Please enter a valid email address.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = 'Sending...';
+
+    try {
+      const res  = await fetch('/api/account/contact', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name, email, message, portalId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send message');
+
+      document.getElementById('contactFormFields').style.display = 'none';
+      btn.style.display = 'none';
+      document.getElementById('contactSuccessBox').style.display = 'block';
+
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.style.display = 'block';
+      btn.disabled    = false;
+      btn.textContent = 'Send Message';
+    }
+  }
+
+
+  // ── CONTACT SUPPORT ───────────────────────────────────────────────────────
+  function openContactModal() {
+    document.getElementById('contactModalOverlay').style.display = 'flex';
+    document.getElementById('contactErrorBox').style.display = 'none';
+    document.getElementById('contactSuccessBox').style.display = 'none';
+    document.getElementById('contactFormFields').style.display = 'block';
+    document.getElementById('contactFooter').style.display = 'flex';
+    document.getElementById('contactName').value = '';
+    document.getElementById('contactEmail').value = '';
+    document.getElementById('contactMessage').value = '';
+  }
+
+  function closeContactModal() {
+    document.getElementById('contactModalOverlay').style.display = 'none';
+  }
+
+  async function submitContact() {
+    const name    = document.getElementById('contactName').value.trim();
+    const email   = document.getElementById('contactEmail').value.trim();
+    const message = document.getElementById('contactMessage').value.trim();
+    const errBox  = document.getElementById('contactErrorBox');
+    const btn     = document.getElementById('contactSubmitBtn');
+
+    errBox.style.display = 'none';
+    if (!name)    { errBox.textContent = 'Please enter your name.'; errBox.style.display = 'block'; return; }
+    if (!email)   { errBox.textContent = 'Please enter your email.'; errBox.style.display = 'block'; return; }
+    if (!message) { errBox.textContent = 'Please enter your message.'; errBox.style.display = 'block'; return; }
+
+    btn.disabled    = true;
+    btn.textContent = 'Sending...';
+
+    try {
+      const res  = await fetch('/api/account/contact', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name, email, message, portalId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send');
+
+      document.getElementById('contactFormFields').style.display = 'none';
+      document.getElementById('contactFooter').style.display = 'none';
+      document.getElementById('contactSuccessBox').style.display = 'block';
+      setTimeout(closeContactModal, 3000);
+
+    } catch (err) {
+      errBox.textContent   = err.message;
+      errBox.style.display = 'block';
+      btn.disabled         = false;
+      btn.textContent      = 'Send Message';
+    }
+  }
+
+  async function logout() {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch(e) {}
+    window.location.href = '/login';
+  }
+
+  // ── CANCEL SUBSCRIPTION ───────────────────────────────────────────────────
+  async function requestCancellation() {
+    if (currentTier === 'trial' || currentTier === 'free') {
+      alert("You're not on a paid plan — nothing to cancel.");
+      return;
+    }
+    const confirmed = confirm("Are you sure you want to cancel your subscription?\n\nThis will cancel immediately and your sync rules will stop working.");
+    if (!confirmed) return;
+
+    const btn = document.querySelector('[onclick="requestCancellation()"]');
+    const msg = document.getElementById('cancelMsg');
+    if (btn) { btn.disabled = true; btn.textContent = 'Cancelling...'; }
+
+    try {
+      const res  = await fetch('/api/paddle/cancel/' + portalId, { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        msg.style.display     = 'block';
+        msg.style.background  = 'rgba(63,208,137,0.1)';
+        msg.style.borderColor = 'rgba(63,208,137,0.3)';
+        msg.style.color       = 'var(--success)';
+        msg.textContent       = '✅ Your subscription has been cancelled. Sync rules have been deactivated.';
+        if (btn) btn.style.display = 'none';
+        setTimeout(load, 2000);
+      } else {
+        throw new Error(data.error || 'Cancellation failed');
+      }
+    } catch (err) {
+      msg.style.display     = 'block';
+      msg.style.background  = 'rgba(255,84,104,0.1)';
+      msg.style.borderColor = 'rgba(255,84,104,0.3)';
+      msg.style.color       = 'var(--error)';
+      msg.textContent       = '❌ ' + err.message + '. Please email support@syncstation.app';
+      if (btn) { btn.disabled = false; btn.textContent = 'Cancel Plan'; }
+    }
+  }
+
   startTierMonitoring();
+
 </script>
 
 <!-- Chat Widget -->
