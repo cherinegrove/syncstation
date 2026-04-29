@@ -19,7 +19,7 @@
 
     .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 40px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; isolation: isolate; }
     .logo { display: flex; align-items: center; gap: 12px; font-family: 'DM Mono', monospace; font-size: 18px; flex: 1; }
-    .logo-icon { width: 32px; height: 32px; border-radius: 8px; overflow: hidden; }
+    .logo img { width: 170px; height: 48px; border-radius: 8px; overflow: hidden; }
     .logo-icon img { width: 32px; height: 32px; }
     .header-nav { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px; border: 1px solid var(--border); position: absolute; left: 50%; transform: translateX(-50%); }
     .header-nav a { text-decoration: none; font-size: 14px; font-weight: 500; padding: 7px 20px; border-radius: 6px; transition: all 0.15s; color: var(--muted); }
@@ -88,9 +88,7 @@
 <body>
     <header class="header">
         <div class="logo">
-            <div class="logo-icon"><img src="/images/icon.webp" alt="SS" onerror="this.parentElement.style.cssText='width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#FF6B35,#A31256)'"></div>
-            SyncStation
-        </div>
+            <div class="logo"><img src="/images/SyncStation@2x.webp" alt="SyncStation" ></div>
         <nav class="header-nav">
             <a id="navSettings" href="#">Sync Rules</a>
             <a id="navAccount" href="#">Account</a>
