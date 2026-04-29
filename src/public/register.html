@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Account - SyncStation</title>
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -17,6 +21,14 @@
             justify-content: center;
             padding: 20px;
         }
+        h1 {
+           text-align: center;
+        color: #F0F0F4;
+        font-size: 18px;
+        margin-bottom: 30px;
+        font-weight: 600;
+        }
+            
         .card {
             background:#18181C;
             border-radius: 10px;
@@ -25,9 +37,7 @@
             width: 100%;
             padding: 40px;
         }
-        .logo { text-align: center; margin-bottom: 30px; }
-        .logo h1 { color: #FF6B35; font-size: 32px; margin-bottom: 8px; }
-        .logo p { color: #F0F0F4; font-size: 14px; }
+        .logo { text-align: center; margin-bottom: 20px; }
         .info-box {
             background: rgba(96,165,250,0.1);
             border: 1px solid rgba(96,165,250,0.3);
@@ -37,29 +47,30 @@
             font-size: 14px;
             color: #60A5FA;
             line-height: 1.5;
+            display: none;
         }
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; color: #A9AAB6; font-weight: 400; font-size: 14px; }
+        label { display: block; margin-bottom: 8px; color: #F0F0F4; font-weight: 500; font-size: 14px; }
         input {
             width: 100%; padding: 12px 15px; background: #222228; border: 1px solid #343543;
             border-radius: 8px; font-size: 14px; transition: all 0.3s;
         }
         input:focus { outline: none; border-color: #FF6B35; box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1); }
-        .password-hint { font-size: 12px; color: #A9AAB6; margin-top: 6px; }
+        .password-hint { font-size: 12px; color: #A9AAB6; margin-top: 20px; }
         .req-list { margin: 6px 0 0 16px; }
         .req-list li { margin: 3px 0; }
         .req-list li.valid { color: #3FD089; }
         .btn {
             width: 100%; padding: 12px; background: #FF6B35; color: white;
-            border: none; border-radius: 8px; font-size: 16px; font-weight: 500;
+            border: none; border-radius: 8px; font-size: 15px; font-weight: 500;
             cursor: pointer; transition: all 0.3s; margin-top: 4px;
         }
         .btn:hover { background: #FF8555; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(255, 107, 53, 0.3); }
         .btn:disabled { background: #222228; color: #A9AAB6; border: 1px solid #343543;cursor: not-allowed; transform: none; }
-        .links { margin-top: 20px; text-align: center; }
-        .links a { color: #FF6B35; text-decoration: none; font-size: 14px; }
-        .links a:hover { text-decoration: underline; }
-        .alert { padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+        .links { margin-top: 20px; text-align: center; font-size: 13px; }
+        .links a { color: #FF6B35; text-decoration: none; font-size: 13px; }
+        .links a:hover { color: #FF8555; }
+        .alert { padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; }
         .alert-error   { background: rgba(255,84,104,0.1); color: #FF5468; border: 1px solid rgba(255,84,104,0.3); }
         .alert-success { background: rgba(63,208,137,0.1); color: #3FD089; border: 1px solid rgba(63,208,137,0.3); }
     </style>
@@ -67,10 +78,9 @@
 <body>
     <div class="card">
         <div class="logo">
-            <h1>SyncStation</h1>
-            <p>Create Your Account</p>
+            <img src="/images/SyncStation-Centred@2x.webp" alt="SyncStation" onerror="this.style.display='none'">
         </div>
-
+        <h1>Sign up for your SyncStation account</h1>
         <div class="info-box">
             💡 After creating your account you'll connect your HubSpot portal via secure OAuth — no portal ID needed here.
         </div>
