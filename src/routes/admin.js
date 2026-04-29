@@ -277,4 +277,72 @@ router.post('/run-checks', requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /admin/api/portals/:portalId/logs ────────────────────────────────────
+router.get('/portals/:portalId/logs', requireAdmin, async (req, res) => {
+  const p = getPool();
+  const { portalId } = req.params;
+  const { status, limit = 100, offset = 0 } = req.query;
+
+  try {
+    let query = `
+      SELECT id, portal_id, sync_time, status, error_message,
+             records_synced, object_type, rule_name,
+             COALESCE(trigger_type, 'polling') AS trigger_type
+      FROM sync_logs
+      WHERE portal_id = $1
+    `;
+    const params = [String(portalId)];
+
+    if (status) {
+      query += ` AND status = $${params.length + 1}`;
+      params.push(status);
+    }
+
+    query += ` ORDER BY sync_time DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const result = await p.query(query, params);
+
+    // Get summary counts
+    const summary = await p.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'success') AS success_count,
+        COUNT(*) FILTER (WHERE status = 'error')   AS error_count,
+        COUNT(*) FILTER (WHERE status = 'blocked') AS blocked_count,
+        COUNT(*)                                   AS total_count,
+        MAX(sync_time) FILTER (WHERE status = 'success') AS last_success,
+        MAX(sync_time) FILTER (WHERE status = 'error')   AS last_error
+      FROM sync_logs WHERE portal_id = $1
+    `, [String(portalId)]);
+
+    res.json({
+      logs:    result.rows,
+      summary: summary.rows[0],
+      portalId
+    });
+  } catch (err) {
+    console.error('[Admin] Logs error:', err.message);
+    res.json({ logs: [], summary: {}, portalId, error: err.message });
+  }
+});
+
+// ── GET /admin/api/logs/errors ────────────────────────────────────────────────
+// Get all recent errors across all portals
+router.get('/logs/errors', requireAdmin, async (req, res) => {
+  const p = getPool();
+  try {
+    const result = await p.query(`
+      SELECT portal_id, sync_time, error_message, object_type, rule_name,
+             COALESCE(trigger_type, 'polling') AS trigger_type
+      FROM sync_logs
+      WHERE status = 'error'
+      ORDER BY sync_time DESC
+      LIMIT 200
+    `);
+    res.json({ errors: result.rows });
+  } catch (err) {
+    res.json({ errors: [], error: err.message });
+  }
+});
+
 module.exports = router;
