@@ -16,7 +16,7 @@
 
   .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 40px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
   .logo { font-family: 'DM Mono', monospace; font-size: 18px; display: flex; align-items: center; gap: 10px; }
-  .logo img { width: 170px; height: 48px; background: display: flex; align-items: center; justify-content: center; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), #ffb347); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
   .admin-badge { background: var(--accent); color: white; font-size: 11px; padding: 2px 8px; border-radius: 4px; }
   .header-right { display: flex; align-items: center; gap: 16px; }
   .admin-name { color: var(--muted); font-size: 13px; }
@@ -164,13 +164,29 @@
   .users-loading { color: var(--muted); font-size: 13px; padding: 16px 0; }
   .copy-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; }
   .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .tab-btn { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .tab-btn:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+  .log-row { display: grid; grid-template-columns: 160px 80px 100px 150px 1fr; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; align-items: start; }
+  .log-row:hover { background: rgba(255,255,255,0.02); }
+  .log-row-header { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .log-status-success { color: var(--success); }
+  .log-status-error   { color: var(--error); }
+  .log-status-blocked { color: var(--warning); }
+  .log-error-msg { color: var(--error); font-size: 11px; margin-top: 2px; word-break: break-word; }
+  .log-summary { display: flex; gap: 20px; padding: 12px 16px; background: var(--surface2); border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+  .log-summary-item { text-align: center; }
+  .log-summary-label { color: var(--muted); font-size: 11px; }
+  .log-summary-value { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 600; }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="logo">
-    <img src="/images/SyncStation@2x.webp" alt="SyncStation">
+    <div class="logo-icon">⇄</div>
+    SyncStation
     <span class="admin-badge">ADMIN</span>
   </div>
   <div class="header-right">
@@ -481,9 +497,15 @@ async function loadPortals() {
         </tr>
         <tr class="users-row ${isOpen ? 'open' : ''}" id="users-row-${p.portal_id}">
           <td colspan="10" class="users-expand-cell">
-            <div class="users-panel" id="users-panel-${p.portal_id}">
+            <div style="display:flex;gap:4px;margin-bottom:12px">
+              <button class="tab-btn active" id="tab-users-${p.portal_id}" onclick="switchTab('${p.portal_id}','users')">👥 Users</button>
+              <button class="tab-btn" id="tab-logs-${p.portal_id}" onclick="switchTab('${p.portal_id}','logs')">📋 Sync Logs</button>
+              <button class="tab-btn" id="tab-errors-${p.portal_id}" onclick="switchTab('${p.portal_id}','errors')">🔴 Errors Only</button>
+            </div>
+            <div id="users-panel-${p.portal_id}">
               <div class="users-loading">Loading users...</div>
             </div>
+            <div id="logs-panel-${p.portal_id}" style="display:none"></div>
           </td>
         </tr>`;
     });
@@ -824,6 +846,92 @@ function showToast(msg, isError = false) {
   const authed = await checkAuth();
   if (authed) { loadPortals(); setInterval(loadPortals, 60000); }
 })();
+
+
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchTab(portalId, tab) {
+  const usersPanel = document.getElementById('users-panel-' + portalId);
+  const logsPanel  = document.getElementById('logs-panel-' + portalId);
+  const tabUsers   = document.getElementById('tab-users-' + portalId);
+  const tabLogs    = document.getElementById('tab-logs-' + portalId);
+  const tabErrors  = document.getElementById('tab-errors-' + portalId);
+
+  [tabUsers, tabLogs, tabErrors].forEach(b => b && b.classList.remove('active'));
+
+  if (tab === 'users') {
+    usersPanel.style.display = 'block';
+    logsPanel.style.display  = 'none';
+    tabUsers.classList.add('active');
+  } else {
+    usersPanel.style.display = 'none';
+    logsPanel.style.display  = 'block';
+    if (tab === 'logs')   tabLogs.classList.add('active');
+    if (tab === 'errors') tabErrors.classList.add('active');
+    loadLogs(portalId, tab === 'errors' ? 'error' : null);
+  }
+}
+
+async function loadLogs(portalId, statusFilter) {
+  const panel = document.getElementById('logs-panel-' + portalId);
+  panel.innerHTML = '<div class="users-loading">⏳ Loading logs...</div>';
+
+  try {
+    const url = `/admin/api/portals/${portalId}/logs?limit=50` + (statusFilter ? `&status=${statusFilter}` : '');
+    const res  = await fetch(url, { credentials: 'include' });
+    const data = await res.json();
+
+    const s = data.summary || {};
+    const summaryHtml = `
+      <div class="log-summary">
+        <div class="log-summary-item">
+          <div class="log-summary-value log-status-success">${s.success_count || 0}</div>
+          <div class="log-summary-label">Successful</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value log-status-error">${s.error_count || 0}</div>
+          <div class="log-summary-label">Errors</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value log-status-blocked">${s.blocked_count || 0}</div>
+          <div class="log-summary-label">Blocked</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value" style="color:var(--muted);font-size:13px">${s.last_success ? fmtDateTime(s.last_success) : '—'}</div>
+          <div class="log-summary-label">Last Success</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value" style="color:var(--error);font-size:13px">${s.last_error ? fmtDateTime(s.last_error) : 'None'}</div>
+          <div class="log-summary-label">Last Error</div>
+        </div>
+      </div>`;
+
+    if (!data.logs || data.logs.length === 0) {
+      panel.innerHTML = summaryHtml + '<div class="no-users">No logs found for this filter.</div>';
+      return;
+    }
+
+    const rows = data.logs.map(log => {
+      const statusCls = `log-status-${log.status}`;
+      const errHtml   = log.error_message ? `<div class="log-error-msg">⚠ ${escHtml(log.error_message)}</div>` : '';
+      return `<div class="log-row">
+        <span style="font-family:'DM Mono',monospace;color:var(--muted)">${fmtDateTime(log.sync_time)}</span>
+        <span class="${statusCls}" style="font-weight:600;text-transform:uppercase">${log.status}</span>
+        <span style="color:var(--muted)">${log.trigger_type || 'polling'}</span>
+        <span style="font-family:'DM Mono',monospace">${escHtml(log.object_type || '—')}</span>
+        <span>${escHtml(log.rule_name || '—')}${errHtml}</span>
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = summaryHtml +
+      `<div class="log-row log-row-header">
+        <span>Time</span><span>Status</span><span>Trigger</span><span>Object</span><span>Rule / Error</span>
+      </div>` + rows;
+
+  } catch (err) {
+    panel.innerHTML = `<div class="users-loading" style="color:var(--error)">Failed to load logs: ${err.message}</div>`;
+  }
+}
+
 </script>
 </body>
 </html>
