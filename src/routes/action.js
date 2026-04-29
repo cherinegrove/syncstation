@@ -89,6 +89,25 @@ router.post("/fields", (req, res) => {
 });
 
 // ── POST /action/execute ───────────────────────────────────────
+// Shared log function for webhook-triggered syncs
+async function logWebhookSync(portalId, objectType, ruleName, status, errorMessage, recordsSynced) {
+  const { Pool } = require('pg');
+  if (!process.env.DATABASE_URL) return;
+  const p = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  try {
+    await p.query(
+      `INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name, trigger_type)
+       VALUES ($1, NOW(), $2, $3, $4, $5, $6, 'webhook')
+       ON CONFLICT DO NOTHING`,
+      [String(portalId), status, errorMessage || null, recordsSynced || 0, objectType || 'unknown', ruleName || 'webhook']
+    );
+  } catch (e) {
+    console.log('[Action] Log error:', e.message);
+  } finally {
+    await p.end().catch(() => {});
+  }
+}
+
 router.post("/execute", verifyHubSpot, async (req, res) => {
   const { portalId, object, inputFields } = req.body;
   console.log("[Action] Execute for portal", portalId, "object:", object?.objectId);
@@ -137,6 +156,8 @@ router.post("/execute", verifyHubSpot, async (req, res) => {
       associationLabel
     });
 
+    await logWebhookSync(portalId, sourceObjectType, `${sourceObjectType}->${targetObjectType}`, result.status === 'ok' ? 'success' : 'error', null, result.updated || 0);
+
     res.json({
       outputFields: {
         sync_status:     result.status,
@@ -146,6 +167,8 @@ router.post("/execute", verifyHubSpot, async (req, res) => {
     });
   } catch (err) {
     console.error("[Action] Error:", err.message);
+    const pid = req.body?.portalId;
+    if (pid) await logWebhookSync(pid, 'unknown', 'webhook', 'error', err.message, 0);
     res.status(500).json({
       outputFields: { sync_status: "error", sync_error: err.message }
     });
