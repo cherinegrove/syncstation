@@ -256,7 +256,7 @@
                 // If user has no portals yet, send them to connect HubSpot first
                 if (!data.hasPortal) {
                     loginBtn.textContent = 'Redirecting to HubSpot...';
-                    showAlert('Account verified! Now connect your HubSpot portal to continue.', 'info');
+                    showAlert('Account verified! Now connect your HubSpot portal to continue.', 'success');
                     setTimeout(() => {
                         window.location.href = '/oauth/install';
                     }, 1500);
