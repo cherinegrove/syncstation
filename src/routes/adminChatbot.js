@@ -55,9 +55,8 @@ router.post('/message', requireAdminSession, async (req, res) => {
         dataContext += `  Total portals: ${s.total_portals || 0} | Trial: ${s.trial_portals || 0} | Starter: ${s.starter_portals || 0} | Pro: ${s.pro_portals || 0} | Business: ${s.business_portals || 0}\n`;
         dataContext += `  Last 24h: ${s.active_today || 0} active portals | ${s.success_24h || 0} successful syncs | ${s.errors_24h || 0} errors\n`;
 
-        // 2. If message mentions errors / issues / problems — pull recent errors
-        const errorKeywords = ['error', 'issue', 'problem', 'fail', 'broken', 'not working', 'wrong', 'stuck'];
-        if (errorKeywords.some(k => message.toLowerCase().includes(k))) {
+        // 2. Always pull recent errors for full context
+        if (true) {
             const errors = await p.query(`
                 SELECT sl.portal_id, sl.sync_time, sl.error_message, sl.object_type, sl.rule_name,
                        sl.source_record_id, sl.target_record_id, pt.tier
@@ -66,7 +65,7 @@ router.post('/message', requireAdminSession, async (req, res) => {
                 WHERE sl.status = 'error'
                   AND sl.sync_time > NOW() - INTERVAL '48 hours'
                 ORDER BY sl.sync_time DESC
-                LIMIT 30
+                LIMIT 50
             `).catch(() => ({ rows: [] }));
 
             if (errors.rows.length > 0) {
@@ -78,6 +77,36 @@ router.post('/message', requireAdminSession, async (req, res) => {
                     dataContext += '\n';
                 });
             }
+        }
+
+        // 2b. Always pull per-portal error breakdown
+        const portalBreakdown = await p.query(`
+            SELECT sl.portal_id, pt.tier,
+                COUNT(*) FILTER (WHERE sl.status = 'error')   AS errors,
+                COUNT(*) FILTER (WHERE sl.status = 'success') AS successes,
+                COUNT(*) FILTER (WHERE sl.status = 'blocked') AS blocked,
+                MAX(sl.sync_time) FILTER (WHERE sl.status = 'error') AS last_error_time,
+                STRING_AGG(DISTINCT sl.error_message, ' | ') FILTER (WHERE sl.status = 'error' AND sl.error_message IS NOT NULL) AS error_types
+            FROM sync_logs sl
+            LEFT JOIN portal_tiers pt ON pt.portal_id = sl.portal_id
+            WHERE sl.sync_time > NOW() - INTERVAL '48 hours'
+            GROUP BY sl.portal_id, pt.tier
+            HAVING COUNT(*) FILTER (WHERE sl.status = 'error') > 0 OR COUNT(*) FILTER (WHERE sl.status = 'success') > 0
+            ORDER BY errors DESC
+        `).catch(() => ({ rows: [] }));
+
+        if (portalBreakdown.rows.length > 0) {
+            dataContext += `
+PER-PORTAL BREAKDOWN (last 48h):
+`;
+            portalBreakdown.rows.forEach(r => {
+                dataContext += `  Portal ${r.portal_id} (${r.tier || 'unknown'}): ${r.successes} success | ${r.errors} errors | ${r.blocked} blocked`;
+                if (r.last_error_time) dataContext += ` | last error: ${new Date(r.last_error_time).toLocaleString()}`;
+                if (r.error_types) dataContext += `
+    Error types: ${r.error_types.substring(0, 200)}`;
+                dataContext += '
+';
+            });
         }
 
         // 3. If message mentions a specific portal ID — pull full data for that portal
@@ -217,7 +246,10 @@ Guidelines:
 - For "rate limit" errors: these auto-resolve — no action needed
 - For "mapping limit" errors: portal is on a plan that doesn't allow more mappings — needs upgrade
 - Always reference specific portal IDs, record IDs, and timestamps from the data when available
-- Keep responses concise and actionable — what's wrong, why, and how to fix it`;
+- Keep responses concise and actionable — what's wrong, why, and how to fix it
+- You have FULL access to all portal data in this session — never say you have limitations or can't see data
+- If data isn't showing, say "no errors found" not "I can't see errors"
+- Always be specific with portal IDs, error messages, and record IDs from the data provided`;
 
     const messages = [
         ...history.slice(-10).map(m => ({
