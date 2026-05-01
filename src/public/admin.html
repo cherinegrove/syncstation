@@ -876,7 +876,7 @@ async function loadLogs(portalId, statusFilter) {
   panel.innerHTML = '<div class="users-loading">⏳ Loading logs...</div>';
 
   try {
-    const url = `/admin/api/portals/${portalId}/logs?limit=50` + (statusFilter ? `&status=${statusFilter}` : '');
+    const url = `/admin/api/portals/${portalId}/logs?limit=100` + (statusFilter ? `&status=${statusFilter}` : '');
     const res  = await fetch(url, { credentials: 'include' });
     const data = await res.json();
 
@@ -913,18 +913,21 @@ async function loadLogs(portalId, statusFilter) {
     const rows = data.logs.map(log => {
       const statusCls = `log-status-${log.status}`;
       const errHtml   = log.error_message ? `<div class="log-error-msg">⚠ ${escHtml(log.error_message)}</div>` : '';
+      const srcId     = log.source_record_id ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">src: ${escHtml(log.source_record_id)}</span>` : '';
+      const tgtId     = log.target_record_id  ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">→ ${escHtml(log.target_record_id)}</span>` : '';
+      const recordIds = (srcId || tgtId) ? `<div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">${srcId}${tgtId}</div>` : '';
       return `<div class="log-row">
         <span style="font-family:'DM Mono',monospace;color:var(--muted)">${fmtDateTime(log.sync_time)}</span>
         <span class="${statusCls}" style="font-weight:600;text-transform:uppercase">${log.status}</span>
         <span style="color:var(--muted)">${log.trigger_type || 'polling'}</span>
         <span style="font-family:'DM Mono',monospace">${escHtml(log.object_type || '—')}</span>
-        <span>${escHtml(log.rule_name || '—')}${errHtml}</span>
+        <span>${escHtml(log.rule_name || '—')}${errHtml}${recordIds}</span>
       </div>`;
     }).join('');
 
     panel.innerHTML = summaryHtml +
       `<div class="log-row log-row-header">
-        <span>Time</span><span>Status</span><span>Trigger</span><span>Object</span><span>Rule / Error</span>
+        <span>Time</span><span>Status</span><span>Trigger</span><span>Object</span><span>Rule / Records</span>
       </div>` + rows;
 
   } catch (err) {
