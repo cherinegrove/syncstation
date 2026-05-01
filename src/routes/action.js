@@ -90,16 +90,15 @@ router.post("/fields", (req, res) => {
 
 // ── POST /action/execute ───────────────────────────────────────
 // Shared log function for webhook-triggered syncs
-async function logWebhookSync(portalId, objectType, ruleName, status, errorMessage, recordsSynced) {
+async function logWebhookSync(portalId, objectType, ruleName, status, errorMessage, recordsSynced, sourceRecordId = null, targetRecordId = null) {
   const { Pool } = require('pg');
   if (!process.env.DATABASE_URL) return;
   const p = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   try {
     await p.query(
-      `INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name, trigger_type)
-       VALUES ($1, NOW(), $2, $3, $4, $5, $6, 'webhook')
-       ON CONFLICT DO NOTHING`,
-      [String(portalId), status, errorMessage || null, recordsSynced || 0, objectType || 'unknown', ruleName || 'webhook']
+      `INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name, trigger_type, source_record_id, target_record_id)
+       VALUES ($1, NOW(), $2, $3, $4, $5, $6, 'webhook', $7, $8)`,
+      [String(portalId), status, errorMessage || null, recordsSynced || 0, objectType || 'unknown', ruleName || 'webhook', sourceRecordId ? String(sourceRecordId) : null, targetRecordId ? String(targetRecordId) : null]
     );
   } catch (e) {
     console.log('[Action] Log error:', e.message);
@@ -156,7 +155,16 @@ router.post("/execute", verifyHubSpot, async (req, res) => {
       associationLabel
     });
 
-    await logWebhookSync(portalId, sourceObjectType, `${sourceObjectType}->${targetObjectType}`, result.status === 'ok' ? 'success' : 'error', null, result.updated || 0);
+    // Log per-target record with IDs
+    if (result.targets && result.targets.length > 0) {
+      for (const target of result.targets) {
+        const tStatus = target.status === 'updated' ? 'success' : (target.status === 'error' ? 'error' : 'blocked');
+        const tErr    = target.status === 'error' ? (target.error || 'Unknown error') : null;
+        await logWebhookSync(portalId, sourceObjectType, `${sourceObjectType}->${targetObjectType}`, tStatus, tErr, target.status === 'updated' ? 1 : 0, object?.objectId, target.id);
+      }
+    } else {
+      await logWebhookSync(portalId, sourceObjectType, `${sourceObjectType}->${targetObjectType}`, result.status === 'ok' ? 'success' : 'error', null, result.updated || 0, object?.objectId, null);
+    }
 
     res.json({
       outputFields: {
