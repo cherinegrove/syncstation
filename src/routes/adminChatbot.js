@@ -17,7 +17,7 @@ function getPool() {
 // ── REQUIRE ADMIN SESSION ─────────────────────────────────────────────────────
 
 function requireAdminSession(req, res, next) {
-    if (req.session && req.session.adminUser) return next();
+    if (req.session && req.session.adminId) return next();
     return res.status(401).json({ error: 'Admin authentication required' });
 }
 
