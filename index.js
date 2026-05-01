@@ -17,7 +17,8 @@ const webhookRoutes  = require('./src/routes/webhooks');
 const notifRoutes    = require('./src/routes/notifications');
 const accountRoutes  = require('./src/routes/account');
 const paddleRoutes   = require('./src/routes/paddle');
-const chatbotRoutes  = require('./src/routes/chatbot');
+const chatbotRoutes      = require('./src/routes/chatbot');
+const adminChatbotRoutes = require('./src/routes/adminChatbot');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -66,7 +67,8 @@ app.use('/api/account',  accountRoutes);
 
 // ── CHATBOT ───────────────────────────────────────────────────────────────────
 
-app.use('/api/chatbot',  chatbotRoutes);
+app.use('/api/chatbot',       chatbotRoutes);
+app.use('/admin/api/assistant', adminChatbotRoutes);
 
 // ── SYNCSTATION ROUTES ────────────────────────────────────────────────────────
 
