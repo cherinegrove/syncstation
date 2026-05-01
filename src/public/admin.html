@@ -179,6 +179,40 @@
   .log-summary-item { text-align: center; }
   .log-summary-label { color: var(--muted); font-size: 11px; }
   .log-summary-value { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 600; }
+
+  /* ── ADMIN ASSISTANT ───────────────────────────── */
+  .assistant-section { max-width: 1100px; margin: 40px auto 0; padding: 0 40px 60px; }
+  .assistant-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .assistant-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .assistant-title { font-size: 20px; font-weight: 600; }
+  .assistant-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .assistant-container { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .assistant-messages { height: 420px; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .assistant-messages::-webkit-scrollbar { width: 4px; }
+  .assistant-messages::-webkit-scrollbar-track { background: transparent; }
+  .assistant-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .assist-msg { display: flex; gap: 10px; align-items: flex-start; max-width: 88%; }
+  .assist-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .assist-avatar { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .assist-avatar.bot { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .assist-avatar.user { background: var(--surface2); border: 1px solid var(--border); }
+  .assist-bubble { padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .assist-msg.bot .assist-bubble { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 3px; }
+  .assist-msg.user .assist-bubble { background: var(--accent); color: white; border-bottom-right-radius: 3px; }
+  .assist-typing { display: flex; gap: 4px; align-items: center; padding: 10px 14px; }
+  .assist-dot { width: 7px; height: 7px; background: var(--muted); border-radius: 50%; animation: assistBounce 1.2s infinite; }
+  .assist-dot:nth-child(2) { animation-delay: 0.2s; }
+  .assist-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes assistBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+  .assistant-input-row { display: flex; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface); }
+  .assistant-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; color: var(--text); font-family: 'DM Sans', sans-serif; resize: none; outline: none; line-height: 1.4; }
+  .assistant-input:focus { border-color: var(--accent); }
+  .assistant-send { background: var(--accent); border: none; border-radius: 8px; width: 40px; height: 40px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; align-self: flex-end; }
+  .assistant-send:hover { background: #FF8555; }
+  .assistant-send:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+  .assist-suggestions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 20px 14px; }
+  .assist-suggestion { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; font-size: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .assist-suggestion:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -876,7 +910,7 @@ async function loadLogs(portalId, statusFilter) {
   panel.innerHTML = '<div class="users-loading">⏳ Loading logs...</div>';
 
   try {
-    const url = `/admin/api/portals/${portalId}/logs?limit=100` + (statusFilter ? `&status=${statusFilter}` : '');
+    const url = `/admin/api/portals/${portalId}/logs?limit=50` + (statusFilter ? `&status=${statusFilter}` : '');
     const res  = await fetch(url, { credentials: 'include' });
     const data = await res.json();
 
@@ -913,21 +947,18 @@ async function loadLogs(portalId, statusFilter) {
     const rows = data.logs.map(log => {
       const statusCls = `log-status-${log.status}`;
       const errHtml   = log.error_message ? `<div class="log-error-msg">⚠ ${escHtml(log.error_message)}</div>` : '';
-      const srcId     = log.source_record_id ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">src: ${escHtml(log.source_record_id)}</span>` : '';
-      const tgtId     = log.target_record_id  ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">→ ${escHtml(log.target_record_id)}</span>` : '';
-      const recordIds = (srcId || tgtId) ? `<div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">${srcId}${tgtId}</div>` : '';
       return `<div class="log-row">
         <span style="font-family:'DM Mono',monospace;color:var(--muted)">${fmtDateTime(log.sync_time)}</span>
         <span class="${statusCls}" style="font-weight:600;text-transform:uppercase">${log.status}</span>
         <span style="color:var(--muted)">${log.trigger_type || 'polling'}</span>
         <span style="font-family:'DM Mono',monospace">${escHtml(log.object_type || '—')}</span>
-        <span>${escHtml(log.rule_name || '—')}${errHtml}${recordIds}</span>
+        <span>${escHtml(log.rule_name || '—')}${errHtml}</span>
       </div>`;
     }).join('');
 
     panel.innerHTML = summaryHtml +
       `<div class="log-row log-row-header">
-        <span>Time</span><span>Status</span><span>Trigger</span><span>Object</span><span>Rule / Records</span>
+        <span>Time</span><span>Status</span><span>Trigger</span><span>Object</span><span>Rule / Error</span>
       </div>` + rows;
 
   } catch (err) {
@@ -936,5 +967,134 @@ async function loadLogs(portalId, statusFilter) {
 }
 
 </script>
+
+
+<!-- ── TECHNICAL PRODUCT SPECIALIST ────────────────────────────────────────── -->
+<div class="assistant-section">
+  <div class="assistant-header">
+    <div class="assistant-icon">⚡</div>
+    <div>
+      <div class="assistant-title">Technical Product Specialist</div>
+      <div class="assistant-subtitle">AI-powered — has live access to all portal data, logs, tiers and user info</div>
+    </div>
+  </div>
+
+  <div class="assistant-container">
+    <div class="assistant-messages" id="assistMessages">
+      <div class="assist-msg bot">
+        <div class="assist-avatar bot">⚡</div>
+        <div class="assist-bubble">Hi! I have live access to all portal data. Ask me about sync errors, specific portals, customer issues, or anything across the platform. You can reference a portal by its ID (e.g. "what's happening with portal 45059701").</div>
+      </div>
+    </div>
+
+    <div class="assist-suggestions" id="assistSuggestions">
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Any errors in the last 24h?</span>
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Which portals are on trial?</span>
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Show me platform summary</span>
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Most common error patterns?</span>
+    </div>
+
+    <div class="assistant-input-row">
+      <textarea class="assistant-input" id="assistInput" rows="1" placeholder="Ask about any portal, error, or customer issue..."></textarea>
+      <button class="assistant-send" id="assistSend" onclick="assistSend()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const assistHistory = [];
+
+  function assistAddMessage(role, text) {
+    const msgs  = document.getElementById('assistMessages');
+    const div   = document.createElement('div');
+    div.className = `assist-msg ${role}`;
+    div.innerHTML = `
+      <div class="assist-avatar ${role}">${role === 'bot' ? '⚡' : '👤'}</div>
+      <div class="assist-bubble">${escHtml(text)}</div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  function assistShowTyping() {
+    const msgs = document.getElementById('assistMessages');
+    const div  = document.createElement('div');
+    div.className = 'assist-msg bot';
+    div.id = 'assistTyping';
+    div.innerHTML = `<div class="assist-avatar bot">⚡</div><div class="assist-bubble assist-typing"><div class="assist-dot"></div><div class="assist-dot"></div><div class="assist-dot"></div></div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function assistRemoveTyping() {
+    const t = document.getElementById('assistTyping');
+    if (t) t.remove();
+  }
+
+  async function assistSend() {
+    const input = document.getElementById('assistInput');
+    const btn   = document.getElementById('assistSend');
+    const text  = input.value.trim();
+    if (!text) return;
+
+    // Hide suggestions after first message
+    const sugg = document.getElementById('assistSuggestions');
+    if (sugg) sugg.style.display = 'none';
+
+    input.value   = '';
+    input.style.height = '';
+    btn.disabled  = true;
+
+    assistAddMessage('user', text);
+    assistHistory.push({ role: 'user', content: text });
+    assistShowTyping();
+
+    try {
+      const res  = await fetch('/admin/api/assistant/message', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body:    JSON.stringify({ message: text, history: assistHistory.slice(-10) })
+      });
+      const data = await res.json();
+      assistRemoveTyping();
+
+      const reply = data.reply || data.error || 'No response received.';
+      assistAddMessage('bot', reply);
+      assistHistory.push({ role: 'assistant', content: reply });
+
+    } catch (err) {
+      assistRemoveTyping();
+      assistAddMessage('bot', 'Failed to get a response. Please check your connection.');
+    } finally {
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+
+  window.assistSend = assistSend;
+
+  window.assistSuggest = function(el) {
+    const input = document.getElementById('assistInput');
+    input.value = el.textContent;
+    assistSend();
+  };
+
+  // Auto-resize textarea
+  document.getElementById('assistInput').addEventListener('input', function() {
+    this.style.height = '';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
+  // Send on Enter (Shift+Enter for newline)
+  document.getElementById('assistInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); assistSend(); }
+  });
+})();
+</script>
+
 </body>
 </html>
