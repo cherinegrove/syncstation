@@ -311,11 +311,23 @@ async function pollObjectType(portalId, objectType) {
     const BATCH_SIZE = 1;  // Process ONE record at a time
     const DELAY_BETWEEN_SYNCS = 1200;  // 1.2 seconds between each sync rule execution
     const DELAY_BETWEEN_BATCHES = 8000;  // 8 seconds between batches (records)
+    let currentClient = client; // Track client so we can refresh mid-cycle
     
     for (let batchStart = 0; batchStart < changedRecords.length; batchStart += BATCH_SIZE) {
       const batch = changedRecords.slice(batchStart, batchStart + BATCH_SIZE);
       const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(changedRecords.length / BATCH_SIZE);
+
+      // Refresh token every 20 batches (~2.5 min) to prevent mid-cycle 401 errors
+      // HubSpot tokens expire after 30 min; this keeps them fresh
+      if (batchNum > 1 && (batchNum % 20 === 1)) {
+        try {
+          currentClient = await getClient(portalId);
+          console.log(`[Polling] ♻️  Token refreshed at batch ${batchNum}/${totalBatches} for portal ${portalId}`);
+        } catch (refreshErr) {
+          console.error(`[Polling] Token refresh failed at batch ${batchNum}:`, refreshErr.message);
+        }
+      }
       
       console.log(`[Polling] Processing batch ${batchNum}/${totalBatches} (${batch.length} records)`);
       
@@ -337,7 +349,7 @@ async function pollObjectType(portalId, objectType) {
               targetObjectType = rule.sourceObject;
             }
             
-            const result = await sync(client, {
+            const result = await sync(currentClient, {
               portalId,
               sourceObjectType,
               sourceId,
