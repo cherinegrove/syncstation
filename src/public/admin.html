@@ -1,387 +1,1103 @@
-// src/routes/admin.js
-const express  = require('express');
-const router   = express.Router();
-const crypto   = require('crypto');
-const { getPortalTier, setPortalTier, getAllPortals, TIERS } = require('../services/tierService');
-const { createNotification, getAllNotifications, runAutomatedChecks } = require('../services/notificationService');
-const { Pool } = require('pg');
-
-let pool = null;
-
-function getPool() {
-  if (!pool && process.env.DATABASE_URL) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncStation Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f11; --surface: #18181c; --surface2: #222228;
+    --border: #2e2e38; --accent: #ff6b35; --text: #f0f0f4;
+    --muted: #8888a0; --success: #4ade80; --warning: #fbbf24; --error: #f87171;
   }
-  return pool;
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 40px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .logo { font-family: 'DM Mono', monospace; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), #ffb347); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .admin-badge { background: var(--accent); color: white; font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .admin-name { color: var(--muted); font-size: 13px; }
+  .btn-logout { padding: 6px 14px; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .btn-logout:hover { color: var(--error); border-color: var(--error); }
+
+  .tabs { display: flex; gap: 4px; padding: 0 40px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .tab { padding: 14px 20px; cursor: pointer; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+
+  .main { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .stats-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; }
+  .stat-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+  .stat-label { font-size: 12px; color: var(--muted); }
+
+  /* Portal table */
+  .portal-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px; }
+  .portal-table th { text-align: left; padding: 12px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .portal-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+  .portal-row { cursor: pointer; }
+  .portal-row:hover td { background: var(--surface2); }
+  .portal-row.expanded td { background: var(--surface2); border-bottom: none; }
+
+  /* Users expand */
+  .users-row { display: none; }
+  .users-row.open { display: table-row; }
+  .users-expand-cell { background: #16161a; border-bottom: 2px solid var(--border); padding: 0 !important; }
+  .users-panel { padding: 20px 24px 24px 48px; }
+  .users-panel-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .users-panel-title span { color: var(--muted); font-weight: 400; }
+
+  .users-inner-table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .users-inner-table th { text-align: left; padding: 9px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); }
+  .users-inner-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid rgba(46,46,56,0.6); background: var(--surface2); vertical-align: middle; }
+  .users-inner-table tr:last-child td { border-bottom: none; }
+  .users-inner-table tr:hover td { background: #25252f; }
+
+  /* Badges */
+  .tier-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-family: 'DM Mono', monospace; }
+  .tier-free      { background: rgba(96,165,250,0.1); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }
+  .tier-trial     { background: rgba(251,191,36,0.15); color: var(--warning); border: 1px solid rgba(251,191,36,0.3); }
+  .tier-starter   { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
+  .tier-pro       { background: rgba(167,139,250,0.1); color: #a78bfa; border: 1px solid rgba(167,139,250,0.3); }
+  .tier-business  { background: rgba(255,107,53,0.1); color: var(--accent); border: 1px solid rgba(255,107,53,0.3); }
+  .tier-cancelled { background: rgba(139,139,139,0.1); color: #888; border: 1px solid rgba(139,139,139,0.3); }
+  .tier-suspended { background: rgba(248,113,113,0.1); color: var(--error); border: 1px solid rgba(248,113,113,0.3); }
+  .tier-expired   { background: rgba(248,113,113,0.1); color: var(--error); border: 1px solid rgba(248,113,113,0.3); }
+
+  .role-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: 'DM Mono', monospace; text-transform: uppercase; }
+  .role-owner { background: rgba(255,107,53,0.15); color: var(--accent); }
+  .role-admin { background: rgba(167,139,250,0.15); color: #a78bfa; }
+  .role-user  { background: rgba(136,136,160,0.12); color: var(--muted); }
+
+  .verified-badge { font-size: 11px; padding: 1px 7px; border-radius: 4px; }
+  .verified-yes { background: rgba(74,222,128,0.1); color: var(--success); }
+  .verified-no  { background: rgba(251,191,36,0.1); color: var(--warning); }
+
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .dot-active   { background: var(--success); }
+  .dot-inactive { background: var(--muted); }
+
+  .connected-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+  .connected-yes { background: rgba(74,222,128,0.1); color: var(--success); }
+  .connected-no  { background: rgba(136,136,160,0.1); color: var(--muted); }
+
+  .count-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-family: 'DM Mono', monospace; background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+  .count-pill.hi   { background: rgba(255,107,53,0.08); border-color: rgba(255,107,53,0.3); color: var(--accent); }
+  .count-pill.zero { color: var(--muted); }
+
+  .countdown-pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 11px; }
+  .countdown-ok      { background: rgba(74,222,128,0.1); color: var(--success); }
+  .countdown-warning { background: rgba(251,191,36,0.15); color: var(--warning); }
+  .countdown-danger  { background: rgba(248,113,113,0.1); color: var(--error); }
+
+  .chevron { display: inline-block; transition: transform 0.2s; color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .chevron.open { transform: rotate(90deg); color: var(--accent); }
+
+  /* Buttons */
+  select, input, textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 8px 12px; width: 100%; }
+  select:focus, input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+  .btn { padding: 8px 16px; border-radius: 8px; border: none; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-primary   { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #ff8555; }
+  .btn-secondary { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+  .btn-secondary:hover { color: var(--text); }
+  .btn-danger    { background: rgba(248,113,113,0.12); color: var(--error); border: 1px solid rgba(248,113,113,0.3); }
+  .btn-danger:hover { background: rgba(248,113,113,0.25); }
+  .btn-ghost     { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+  .form-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .form-card .subtitle { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+
+  .mono { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+  .actions-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .hint { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+
+  /* Confirm delete modal */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 480px; padding: 32px; }
+  .modal-icon { font-size: 40px; margin-bottom: 16px; }
+  .modal-box h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .modal-box p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 8px; }
+  .delete-list { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 16px 0; font-size: 13px; }
+  .delete-list li { color: var(--muted); padding: 3px 0; list-style: none; display: flex; align-items: center; gap: 8px; }
+  .delete-list li::before { content: '—'; color: var(--error); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+  .confirm-input { margin: 16px 0 0; }
+  .confirm-input label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+
+  /* Reset link modal */
+  .reset-url-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; font-family: 'DM Mono', monospace; font-size: 12px; word-break: break-all; color: var(--accent); margin-bottom: 12px; line-height: 1.6; }
+  .email-status { font-size: 13px; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+  .email-sent     { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
+  .email-not-sent { background: rgba(251,191,36,0.1); color: var(--warning); border: 1px solid rgba(251,191,36,0.3); }
+
+  .loading-state { text-align: center; padding: 60px; color: var(--muted); }
+  .spinner { border: 3px solid var(--surface2); border-top: 3px solid var(--accent); border-radius: 50%; width: 32px; height: 32px; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--success); border-radius: 8px; padding: 12px 18px; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 300; max-width: 360px; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { border-left-color: var(--error); }
+
+  .notif-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; }
+  .notif-info    { background: rgba(96,165,250,0.1); color: #60a5fa; }
+  .notif-warning { background: rgba(251,191,36,0.15); color: var(--warning); }
+  .notif-error   { background: rgba(248,113,113,0.1); color: var(--error); }
+  .notif-success { background: rgba(74,222,128,0.1); color: var(--success); }
+
+  .no-users { color: var(--muted); font-size: 13px; padding: 16px 0; font-style: italic; }
+  .users-loading { color: var(--muted); font-size: 13px; padding: 16px 0; }
+  .copy-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .tab-btn { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .tab-btn:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+  .log-row { display: grid; grid-template-columns: 160px 80px 100px 150px 1fr; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; align-items: start; }
+  .log-row:hover { background: rgba(255,255,255,0.02); }
+  .log-row-header { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .log-status-success { color: var(--success); }
+  .log-status-error   { color: var(--error); }
+  .log-status-blocked { color: var(--warning); }
+  .log-error-msg { color: var(--error); font-size: 11px; margin-top: 2px; word-break: break-word; }
+  .log-summary { display: flex; gap: 20px; padding: 12px 16px; background: var(--surface2); border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+  .log-summary-item { text-align: center; }
+  .log-summary-label { color: var(--muted); font-size: 11px; }
+  .log-summary-value { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 600; }
+
+  /* ── ADMIN ASSISTANT ───────────────────────────── */
+  .assistant-section { max-width: 1100px; margin: 40px auto 0; padding: 0 40px 60px; }
+  .assistant-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .assistant-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .assistant-title { font-size: 20px; font-weight: 600; }
+  .assistant-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .assistant-container { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .assistant-messages { height: 420px; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .assistant-messages::-webkit-scrollbar { width: 4px; }
+  .assistant-messages::-webkit-scrollbar-track { background: transparent; }
+  .assistant-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .assist-msg { display: flex; gap: 10px; align-items: flex-start; max-width: 88%; }
+  .assist-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .assist-avatar { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .assist-avatar.bot { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .assist-avatar.user { background: var(--surface2); border: 1px solid var(--border); }
+  .assist-bubble { padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .assist-msg.bot .assist-bubble { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 3px; }
+  .assist-msg.user .assist-bubble { background: var(--accent); color: white; border-bottom-right-radius: 3px; }
+  .assist-typing { display: flex; gap: 4px; align-items: center; padding: 10px 14px; }
+  .assist-dot { width: 7px; height: 7px; background: var(--muted); border-radius: 50%; animation: assistBounce 1.2s infinite; }
+  .assist-dot:nth-child(2) { animation-delay: 0.2s; }
+  .assist-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes assistBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+  .assistant-input-row { display: flex; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface); }
+  .assistant-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; color: var(--text); font-family: 'DM Sans', sans-serif; resize: none; outline: none; line-height: 1.4; }
+  .assistant-input:focus { border-color: var(--accent); }
+  .assistant-send { background: var(--accent); border: none; border-radius: 8px; width: 40px; height: 40px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; align-self: flex-end; }
+  .assistant-send:hover { background: #FF8555; }
+  .assistant-send:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+  .assist-suggestions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 20px 14px; }
+  .assist-suggestion { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; font-size: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .assist-suggestion:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⇄</div>
+    SyncStation
+    <span class="admin-badge">ADMIN</span>
+  </div>
+  <div class="header-right">
+    <span class="admin-name" id="adminName">—</span>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showPanel('portals', this)">Portals</div>
+  <div class="tab" onclick="showPanel('messages', this)">Message Center</div>
+  <div class="tab" onclick="showPanel('history', this)">Notification History</div>
+</div>
+
+<div class="main">
+
+  <!-- PORTALS -->
+  <div class="panel active" id="panel-portals">
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-value" id="statTotal">—</div><div class="stat-label">Total portals</div></div>
+      <div class="stat-card"><div class="stat-value" id="statTrial">—</div><div class="stat-label">On trial</div></div>
+      <div class="stat-card"><div class="stat-value" id="statPaid">—</div><div class="stat-label">Paid</div></div>
+      <div class="stat-card"><div class="stat-value" id="statExpired">—</div><div class="stat-label">Expired</div></div>
+      <div class="stat-card"><div class="stat-value" id="statMRR">—</div><div class="stat-label">Est. MRR</div></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-secondary btn-sm" onclick="runChecks()">▶ Run Automated Checks</button>
+      <button class="btn btn-secondary btn-sm" onclick="loadPortals()">↻ Refresh</button>
+      <span class="mono" id="checksStatus"></span>
+      <span class="mono" id="lastUpdated" style="margin-left:auto"></span>
+    </div>
+    <p class="hint">Click a portal row to see its users &amp; sync rules. Use 🗑 to permanently remove a portal connection.</p>
+    <div id="portalsContainer">
+      <div class="loading-state"><div class="spinner"></div><p>Loading portals...</p></div>
+    </div>
+  </div>
+
+  <!-- MESSAGES -->
+  <div class="panel" id="panel-messages">
+    <div class="form-card">
+      <h3>📬 Send In-App Notification</h3>
+      <div class="subtitle">Send a notification to one or all portals.</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Target</label>
+          <select id="msgTarget" onchange="toggleSpecificPortal()">
+            <option value="all">All Portals</option>
+            <option value="specific">Specific Portal</option>
+          </select>
+        </div>
+        <div class="form-group" id="specificPortalGroup" style="display:none">
+          <label class="form-label">Portal ID</label>
+          <input type="text" id="msgPortalId" placeholder="123456">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select id="msgType">
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+            <option value="success">Success</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Title</label>
+          <input type="text" id="msgTitle" placeholder="Your trial is ending soon">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Message</label>
+          <textarea id="msgBody" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Action Button Label (optional)</label>
+          <input type="text" id="msgActionLabel" placeholder="View Plans">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Action URL (optional)</label>
+          <input type="text" id="msgActionUrl" placeholder="/account">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary" onclick="sendMessage()">Send Notification</button>
+        <span class="mono" id="msgStatus"></span>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="quickMsg('trial_expiring')">Trial Expiring</button>
+        <button class="btn btn-secondary btn-sm" onclick="quickMsg('usage_90')">Usage at 90%</button>
+        <button class="btn btn-secondary btn-sm" onclick="quickMsg('new_feature')">New Feature</button>
+        <button class="btn btn-secondary btn-sm" onclick="quickMsg('maintenance')">Maintenance</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="panel" id="panel-history">
+    <div class="actions-row">
+      <button class="btn btn-secondary btn-sm" onclick="loadHistory()">↻ Refresh</button>
+    </div>
+    <div id="historyContainer">
+      <div class="loading-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── DELETE CONFIRM MODAL ── -->
+<div class="overlay" id="deleteOverlay">
+  <div class="modal-box">
+    <div class="modal-icon">🗑️</div>
+    <h3>Delete Portal Connection</h3>
+    <p>This will permanently remove all data for portal <strong id="deletePortalId">—</strong>.</p>
+    <ul class="delete-list">
+      <li>HubSpot OAuth token (disconnects the app)</li>
+      <li>All sync rules &amp; property mappings</li>
+      <li>Tier / subscription record</li>
+      <li>All in-app notifications</li>
+      <li>User accounts linked to this portal</li>
+    </ul>
+    <p style="color:var(--error);font-size:13px">⚠ This cannot be undone. The HubSpot portal owner will need to reinstall the app to reconnect.</p>
+    <div class="confirm-input">
+      <label>Type the portal ID to confirm:</label>
+      <input type="text" id="deleteConfirmInput" placeholder="Enter portal ID">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" id="deleteConfirmBtn" onclick="confirmDelete()" disabled>Delete Everything</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESET LINK MODAL ── -->
+<div class="overlay" id="resetOverlay">
+  <div class="modal-box">
+    <h3>🔑 Password Reset Link</h3>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:16px" id="resetModalSub">—</p>
+    <div class="email-status" id="resetEmailStatus" style="display:none"></div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Reset URL (expires in 1 hour):</p>
+    <div class="reset-url-box" id="resetUrlDisplay">—</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="copy-btn" onclick="copyResetUrl()">📋 Copy Link</button>
+      <a id="resetUrlOpen" href="#" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:none;margin-left:4px">Open ↗</a>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeResetModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TIER_PRICES     = { trial: 0, starter: 10, pro: 15, business: 40, cancelled: 0, suspended: 0, free: 0 };
+const expandedPortals = new Set();
+const usersCache      = {};
+let   deletePortalId  = null;
+let   currentResetUrl = '';
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+async function checkAuth() {
+  try {
+    const res = await fetch('/admin/auth/me', { credentials: 'include' });
+    if (!res.ok) { window.location.href = '/admin/auth/login'; return false; }
+    const data = await res.json();
+    document.getElementById('adminName').textContent = data.username || 'Admin';
+    return true;
+  } catch { window.location.href = '/admin/auth/login'; return false; }
 }
 
-function requireAdmin(req, res, next) {
-  if (req.session && req.session.adminId) return next();
-  if (req.accepts('html')) return res.redirect('/admin/auth/login');
-  res.status(401).json({ error: 'Not authenticated' });
+async function logout() {
+  try { await fetch('/admin/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+  window.location.href = '/admin/auth/login';
 }
 
-// ── GET /admin/api/portals ────────────────────────────────────────────────────
-router.get('/portals', requireAdmin, async (req, res) => {
-  const p = getPool();
-  try {
-    await p.query(`
-      INSERT INTO portal_tiers (portal_id, tier, created_at)
-      SELECT DISTINCT t.portal_id, 'trial', NOW()
-      FROM tokens t
-      WHERE t.portal_id NOT IN (SELECT portal_id FROM portal_tiers)
-      ON CONFLICT (portal_id) DO NOTHING
-    `).catch(() => {});
+// ── PANELS ────────────────────────────────────────────────────────────────────
+function showPanel(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'history') loadHistory();
+}
 
-    const portals = await getAllPortals();
+function toggleSpecificPortal() {
+  document.getElementById('specificPortalGroup').style.display =
+    document.getElementById('msgTarget').value === 'specific' ? 'flex' : 'none';
+}
 
-    const enriched = await Promise.all(portals.map(async (portal) => {
-      let syncRuleCount = 0;
-      let totalMappings = 0;
-      let userCount = 0;
-      let hasToken = false;
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function fmtDateTime(d) {
+  if (!d) return 'Never';
+  return new Date(d).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function trialCountdown(createdAt, tier) {
+  if (tier !== 'trial') return null;
+  const expiry   = new Date(createdAt).getTime() + 14 * 86400000;
+  const daysLeft = Math.ceil((expiry - Date.now()) / 86400000);
+  return { daysLeft, expiry, isExpired: daysLeft <= 0 };
+}
+function pill(value, label, hi = false) {
+  const cls = value === 0 ? 'zero' : hi ? 'hi' : '';
+  return `<span class="count-pill ${cls}">${value} ${label}</span>`;
+}
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
-      try {
-        const r = await p.query('SELECT rules FROM sync_rules WHERE portal_id = $1', [String(portal.portal_id)]);
-        if (r.rows.length > 0) {
-          const rules = r.rows[0].rules || [];
-          syncRuleCount = rules.length;
-          totalMappings = rules.reduce((sum, r) => sum + (r.mappings?.length || 0), 0);
-        }
-      } catch (e) {}
-
-      try {
-        const r = await p.query(
-          'SELECT COUNT(*) as count FROM portal_users WHERE portal_id = $1 AND is_active = true',
-          [String(portal.portal_id)]
-        );
-        userCount = parseInt(r.rows[0]?.count || 0);
-      } catch (e) {}
-
-      try {
-        const r = await p.query('SELECT 1 FROM tokens WHERE portal_id = $1', [String(portal.portal_id)]);
-        hasToken = r.rows.length > 0;
-      } catch (e) {}
-
-      return { ...portal, sync_rule_count: syncRuleCount, total_mappings: totalMappings, user_count: userCount, has_token: hasToken };
-    }));
-
-    res.json({ portals: enriched });
-  } catch (err) {
-    console.error('[Admin] Error getting portals:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── GET /admin/api/portals/:portalId/users ────────────────────────────────────
-router.get('/portals/:portalId/users', requireAdmin, async (req, res) => {
-  const p = getPool();
-  const { portalId } = req.params;
-  try {
-    // Get users from portal_users table (new auth system)
-    const result = await p.query(`
-      SELECT
-        u.id,
-        u.email,
-        u.full_name,
-        u.last_login,
-        u.email_verified,
-        u.is_active,
-        u.created_at  AS registered_at,
-        pu.role,
-        pu.invited_at,
-        pu.is_active  AS portal_active
-      FROM portal_users pu
-      JOIN users u ON u.id = pu.user_id
-      WHERE pu.portal_id = $1
-      ORDER BY
-        CASE pu.role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 ELSE 3 END,
-        u.full_name ASC
-    `, [String(portalId)]);
-
-    // Fallback: if no portal_users, show the HubSpot token installer email
-    let users = result.rows;
-    if (users.length === 0) {
-      try {
-        const tokenResult = await p.query(
-          `SELECT data->>'installerEmail' AS email, data->>'hub_id' AS hub_id, updated_at
-           FROM tokens WHERE portal_id = $1`,
-          [String(portalId)]
-        );
-        if (tokenResult.rows.length > 0 && tokenResult.rows[0].email) {
-          users = [{
-            id: null,
-            email: tokenResult.rows[0].email,
-            full_name: 'HubSpot Owner (OAuth)',
-            last_login: tokenResult.rows[0].updated_at,
-            email_verified: true,
-            is_active: true,
-            registered_at: tokenResult.rows[0].updated_at,
-            role: 'owner',
-            portal_active: true,
-            auth_source: 'hubspot_oauth'
-          }];
-        }
-      } catch (e) {}
-    }
-
-    res.json({ users, portalId });
-  } catch (err) {
-    console.error('[Admin] Error getting portal users:', err.message);
-    res.json({ users: [], portalId, note: err.message });
-  }
-});
-
-// ── DELETE /admin/api/portals/:portalId ───────────────────────────────────────
-// Removes a portal connection entirely:
-// - tokens (HubSpot OAuth connection)
-// - sync_rules
-// - portal_tiers
-// - portal_users (if any)
-// - notifications (if any)
-router.delete('/portals/:portalId', requireAdmin, async (req, res) => {
-  const p = getPool();
-  const { portalId } = req.params;
-  const id = String(portalId);
+// ── LOAD PORTALS ──────────────────────────────────────────────────────────────
+async function loadPortals() {
+  document.getElementById('portalsContainer').innerHTML =
+    '<div class="loading-state"><div class="spinner"></div><p>Loading portals...</p></div>';
 
   try {
-    const deleted = {};
+    const res = await fetch('/admin/api/portals', { credentials: 'include' });
+    if (res.status === 401) { window.location.href = '/admin/auth/login'; return; }
+    const { portals = [] } = await res.json();
 
-    // 1. Remove HubSpot OAuth token
-    try {
-      const r = await p.query('DELETE FROM tokens WHERE portal_id = $1', [id]);
-      deleted.tokens = r.rowCount;
-    } catch (e) { deleted.tokens = 0; }
-
-    // 2. Remove sync rules
-    try {
-      const r = await p.query('DELETE FROM sync_rules WHERE portal_id = $1', [id]);
-      deleted.sync_rules = r.rowCount;
-    } catch (e) { deleted.sync_rules = 0; }
-
-    // 3. Remove portal tier
-    try {
-      const r = await p.query('DELETE FROM portal_tiers WHERE portal_id = $1', [id]);
-      deleted.portal_tiers = r.rowCount;
-    } catch (e) { deleted.portal_tiers = 0; }
-
-    // 4. Remove portal users
-    try {
-      const r = await p.query('DELETE FROM portal_users WHERE portal_id = $1', [id]);
-      deleted.portal_users = r.rowCount;
-    } catch (e) { deleted.portal_users = 0; }
-
-    // 5. Remove notifications
-    try {
-      const r = await p.query('DELETE FROM notifications WHERE portal_id = $1', [id]);
-      deleted.notifications = r.rowCount;
-    } catch (e) { deleted.notifications = 0; }
-
-    // 6. Remove polling sync times
-    try {
-      const r = await p.query('DELETE FROM polling_sync_times WHERE portal_id = $1', [id]);
-      deleted.polling_sync_times = r.rowCount;
-    } catch (e) { deleted.polling_sync_times = 0; }
-
-    console.log(`[Admin] Deleted portal ${id}:`, deleted);
-    res.json({ ok: true, portalId: id, deleted });
-
-  } catch (err) {
-    console.error('[Admin] Delete portal error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── POST /admin/api/users/:userId/send-reset ──────────────────────────────────
-router.post('/users/:userId/send-reset', requireAdmin, async (req, res) => {
-  const p = getPool();
-  const { userId } = req.params;
-
-  try {
-    const userResult = await p.query(
-      'SELECT id, email, full_name FROM users WHERE id = $1',
-      [parseInt(userId)]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt  = new Date(Date.now() + 60 * 60 * 1000);
-
-    await p.query(
-      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-      [user.id, resetToken, expiresAt]
-    );
-
-    const appUrl   = process.env.APP_URL || process.env.APP_BASE_URL || 'https://portal.syncstation.app';
-    const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
-
-    let emailSent = false;
-    try {
-      const emailService = require('../services/emailService_auth');
-      await emailService.sendPasswordResetEmail(user.email, user.full_name, resetToken);
-      emailSent = true;
-    } catch (e) {
-      console.log('[Admin] Email not sent:', e.message);
-    }
-
-    res.json({ success: true, userId: user.id, email: user.email, name: user.full_name, resetUrl, emailSent, expiresAt });
-
-  } catch (err) {
-    console.error('[Admin] Send reset error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── POST /admin/api/portals/:portalId/tier ────────────────────────────────────
-router.post('/portals/:portalId/tier', requireAdmin, async (req, res) => {
-  try {
-    const { portalId } = req.params;
-    const { tier }     = req.body;
-
-    if (!TIERS[tier.toUpperCase()]) {
-      return res.status(400).json({ error: 'Invalid tier' });
-    }
-
-    const result = await setPortalTier(portalId, tier.toLowerCase());
-    res.json({ ok: true, ...result });
-  } catch (err) {
-    console.error('[Admin] Error setting tier:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── POST /admin/api/notify ────────────────────────────────────────────────────
-router.post('/notify', requireAdmin, async (req, res) => {
-  try {
-    const { portalId, all, type, title, message, actionLabel, actionUrl } = req.body;
-
-    if (!title || !message) return res.status(400).json({ error: 'Missing title or message' });
-
-    if (all) {
-      const portals = await getAllPortals();
-      let sent = 0;
-      for (const portal of portals) {
-        await createNotification(portal.portal_id, { type, title, message, actionLabel, actionUrl });
-        sent++;
+    let trial = 0, paid = 0, expired = 0, mrr = 0;
+    portals.forEach(p => {
+      const tier = (p.tier || 'trial').toLowerCase();
+      if (tier === 'trial') {
+        const c = trialCountdown(p.created_at, 'trial');
+        if (c?.isExpired) expired++; else trial++;
+      } else if (!['cancelled','suspended'].includes(tier)) {
+        paid++;
+        mrr += TIER_PRICES[tier] || 0;
       }
-      return res.json({ sent });
-    }
-
-    if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-
-    await createNotification(portalId, { type, title, message, actionLabel, actionUrl });
-    res.json({ sent: 1 });
-  } catch (err) {
-    console.error('[Admin] Error sending notification:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── GET /admin/api/notifications ─────────────────────────────────────────────
-router.get('/notifications', requireAdmin, async (req, res) => {
-  try {
-    const notifications = await getAllNotifications();
-    res.json({ notifications });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── POST /admin/api/run-checks ────────────────────────────────────────────────
-router.post('/run-checks', requireAdmin, async (req, res) => {
-  try {
-    await runAutomatedChecks();
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── GET /admin/api/portals/:portalId/logs ────────────────────────────────────
-router.get('/portals/:portalId/logs', requireAdmin, async (req, res) => {
-  const p = getPool();
-  const { portalId } = req.params;
-  const { status, limit = 100, offset = 0 } = req.query;
-
-  try {
-    // Check which optional columns exist
-    let hasTriggerType = false, hasRecordIds = false;
-    try { await p.query("SELECT trigger_type FROM sync_logs LIMIT 1"); hasTriggerType = true; } catch(e) {}
-    try { await p.query("SELECT source_record_id FROM sync_logs LIMIT 1"); hasRecordIds = true; } catch(e) {}
-
-    let query = `
-      SELECT id, portal_id, sync_time, status, error_message,
-             records_synced, object_type, rule_name
-             ${hasTriggerType ? ", COALESCE(trigger_type, 'polling') AS trigger_type" : ", 'polling' AS trigger_type"}
-             ${hasRecordIds ? ", source_record_id, target_record_id" : ", NULL AS source_record_id, NULL AS target_record_id"}
-      FROM sync_logs
-      WHERE portal_id = $1
-    `;
-    const params = [String(portalId)];
-
-    if (status) {
-      query += ` AND status = $${params.length + 1}`;
-      params.push(status);
-    }
-
-    const { recordId } = req.query;
-    if (recordId) {
-      query += ` AND (source_record_id = $${params.length + 1} OR target_record_id = $${params.length + 1})`;
-      params.push(recordId);
-    }
-
-    query += ` ORDER BY sync_time DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(parseInt(limit), parseInt(offset));
-
-    const result = await p.query(query, params);
-
-    // Get summary counts
-    const summary = await p.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'success') AS success_count,
-        COUNT(*) FILTER (WHERE status = 'error')   AS error_count,
-        COUNT(*) FILTER (WHERE status = 'blocked') AS blocked_count,
-        COUNT(*)                                   AS total_count,
-        MAX(sync_time) FILTER (WHERE status = 'success') AS last_success,
-        MAX(sync_time) FILTER (WHERE status = 'error')   AS last_error
-      FROM sync_logs WHERE portal_id = $1
-    `, [String(portalId)]).catch(() => ({ rows: [{}] }));
-
-    res.json({
-      logs:    result.rows,
-      summary: summary.rows[0],
-      portalId
     });
+
+    document.getElementById('statTotal').textContent   = portals.length;
+    document.getElementById('statTrial').textContent   = trial;
+    document.getElementById('statPaid').textContent    = paid;
+    document.getElementById('statExpired').textContent = expired;
+    document.getElementById('statMRR').textContent     = '$' + mrr;
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    if (!portals.length) {
+      document.getElementById('portalsContainer').innerHTML =
+        '<div class="loading-state"><p>No portals found yet</p></div>';
+      return;
+    }
+
+    let rows = '';
+    portals.forEach(p => {
+      const tier      = (p.tier || 'trial').toLowerCase();
+      const c         = trialCountdown(p.created_at, tier);
+      const isExpired = c?.isExpired;
+      const tierCls   = isExpired ? 'expired' : tier;
+      const tierLabel = isExpired ? 'Trial Expired' : tier.charAt(0).toUpperCase() + tier.slice(1);
+      const expiry    = tier === 'trial' ? fmtDate(new Date(c?.expiry)) : '—';
+      const isOpen    = expandedPortals.has(String(p.portal_id));
+
+      let statusHtml = '—';
+      if (tier === 'trial' && c) {
+        const cls = c.isExpired ? 'danger' : c.daysLeft <= 3 ? 'danger' : c.daysLeft <= 7 ? 'warning' : 'ok';
+        statusHtml = `<span class="countdown-pill countdown-${cls}">${c.isExpired ? 'Expired' : c.daysLeft + 'd left'}</span>`;
+      } else if (!['trial','cancelled','suspended'].includes(tier)) {
+        statusHtml = `<span class="countdown-pill countdown-ok">Active</span>`;
+      }
+
+      const syncRules  = p.sync_rule_count || 0;
+      const mappings   = p.total_mappings  || 0;
+      const users      = p.user_count      || 0;
+      const connected  = p.has_token;
+
+      rows += `
+        <tr class="portal-row${isOpen ? ' expanded' : ''}" onclick="toggleUsers('${p.portal_id}', this)">
+          <td>
+            <span style="font-family:'DM Mono',monospace;font-size:13px">${p.portal_id}</span>
+            <span class="chevron ${isOpen ? 'open' : ''}">▶</span><br>
+            <a href="/settings?portalId=${p.portal_id}" target="_blank" onclick="event.stopPropagation()" style="color:var(--accent);font-size:11px;text-decoration:none">Settings ↗</a>
+          </td>
+          <td><span class="tier-badge tier-${tierCls}">${tierLabel}</span></td>
+          <td>
+            <span class="connected-badge ${connected ? 'connected-yes' : 'connected-no'}">
+              ${connected ? '⬤ Connected' : '○ No token'}
+            </span>
+          </td>
+          <td><span class="mono">${fmtDate(p.created_at)}</span></td>
+          <td><span class="mono">${expiry}</span></td>
+          <td>${statusHtml}</td>
+          <td>${pill(users, users === 1 ? 'user' : 'users', users > 0)}</td>
+          <td>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              ${pill(syncRules, syncRules === 1 ? 'rule' : 'rules', syncRules > 0)}
+              ${pill(mappings, mappings === 1 ? 'mapping' : 'mappings', mappings > 0)}
+            </div>
+          </td>
+          <td onclick="event.stopPropagation()">
+            <select id="tier-${p.portal_id}" style="width:148px">
+              <option value="free"      ${tier==='free'?'selected':''}>Free</option>
+              <option value="trial"     ${tier==='trial'?'selected':''}>Trial</option>
+              <option value="starter"   ${tier==='starter'?'selected':''}>Starter ($10)</option>
+              <option value="pro"       ${tier==='pro'?'selected':''}>Pro ($15)</option>
+              <option value="business"  ${tier==='business'?'selected':''}>Business ($40)</option>
+              <option value="suspended" ${tier==='suspended'?'selected':''}>🚫 Suspended</option>
+              <option value="cancelled" ${tier==='cancelled'?'selected':''}>❌ Cancelled</option>
+            </select>
+          </td>
+          <td onclick="event.stopPropagation()" style="white-space:nowrap">
+            <button class="btn btn-primary btn-sm" onclick="saveTier('${p.portal_id}')">Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="msgPortal('${p.portal_id}')" style="margin-left:4px">✉</button>
+            <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${p.portal_id}')" style="margin-left:4px" title="Delete portal connection">🗑</button>
+          </td>
+        </tr>
+        <tr class="users-row ${isOpen ? 'open' : ''}" id="users-row-${p.portal_id}">
+          <td colspan="10" class="users-expand-cell">
+            <div style="display:flex;gap:4px;margin-bottom:12px">
+              <button class="tab-btn active" id="tab-users-${p.portal_id}" onclick="switchTab('${p.portal_id}','users')">👥 Users</button>
+              <button class="tab-btn" id="tab-logs-${p.portal_id}" onclick="switchTab('${p.portal_id}','logs')">📋 Sync Logs</button>
+              <button class="tab-btn" id="tab-errors-${p.portal_id}" onclick="switchTab('${p.portal_id}','errors')">🔴 Errors Only</button>
+              <input id="recordSearch-${p.portal_id}" type="text" placeholder="Search record ID..." onkeydown="if(event.key==='Enter')loadLogs('${p.portal_id}',null)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text);width:160px;font-family:'DM Mono',monospace;margin-left:8px">
+              <button class="tab-btn" onclick="loadLogs('${p.portal_id}',null)" style="font-size:11px">🔍</button>
+            </div>
+            <div id="users-panel-${p.portal_id}">
+              <div class="users-loading">Loading users...</div>
+            </div>
+            <div id="logs-panel-${p.portal_id}" style="display:none"></div>
+          </td>
+        </tr>`;
+    });
+
+    document.getElementById('portalsContainer').innerHTML = `
+      <table class="portal-table">
+        <thead>
+          <tr>
+            <th>Portal ID</th><th>Tier</th><th>HubSpot</th><th>Started</th>
+            <th>Expires</th><th>Status</th><th>Users</th><th>Sync Rules</th>
+            <th>Change Tier</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    expandedPortals.forEach(id => renderUsers(id));
+
   } catch (err) {
-    console.error('[Admin] Logs error:', err.message);
-    res.json({ logs: [], summary: {}, portalId, error: err.message });
+    console.error(err);
+    document.getElementById('portalsContainer').innerHTML =
+      '<div class="loading-state"><p style="color:var(--error)">Failed to load portals.</p></div>';
   }
+}
+
+// ── DELETE PORTAL ─────────────────────────────────────────────────────────────
+
+function openDeleteModal(portalId) {
+  deletePortalId = String(portalId);
+  document.getElementById('deletePortalId').textContent = deletePortalId;
+  document.getElementById('deleteConfirmInput').value   = '';
+  document.getElementById('deleteConfirmBtn').disabled  = true;
+  document.getElementById('deleteOverlay').classList.add('open');
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteOverlay').classList.remove('open');
+  deletePortalId = null;
+}
+
+// Enable delete button only when portal ID is typed correctly
+document.getElementById('deleteConfirmInput').addEventListener('input', function() {
+  document.getElementById('deleteConfirmBtn').disabled =
+    this.value.trim() !== deletePortalId;
 });
 
-// ── GET /admin/api/logs/errors ────────────────────────────────────────────────
-// Get all recent errors across all portals
-router.get('/logs/errors', requireAdmin, async (req, res) => {
-  const p = getPool();
+async function confirmDelete() {
+  if (!deletePortalId) return;
+
+  const btn = document.getElementById('deleteConfirmBtn');
+  btn.textContent = 'Deleting...';
+  btn.disabled    = true;
+
   try {
-    const result = await p.query(`
-      SELECT portal_id, sync_time, error_message, object_type, rule_name,
-             COALESCE(trigger_type, 'polling') AS trigger_type
-      FROM sync_logs
-      WHERE status = 'error'
-      ORDER BY sync_time DESC
-      LIMIT 200
-    `);
-    res.json({ errors: result.rows });
+    const res  = await fetch(`/admin/api/portals/${deletePortalId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast('✗ Delete failed: ' + (data.error || 'Unknown error'), true);
+      btn.textContent = 'Delete Everything';
+      btn.disabled    = false;
+      return;
+    }
+
+    closeDeleteModal();
+    showToast(`✓ Portal ${deletePortalId} deleted`);
+
+    // Remove from caches
+    delete usersCache[deletePortalId];
+    expandedPortals.delete(deletePortalId);
+
+    loadPortals();
+
   } catch (err) {
-    res.json({ errors: [], error: err.message });
+    showToast('✗ ' + err.message, true);
+    btn.textContent = 'Delete Everything';
+    btn.disabled    = false;
   }
+}
+
+document.getElementById('deleteOverlay').addEventListener('click', e => {
+  if (e.target.id === 'deleteOverlay') closeDeleteModal();
 });
 
-module.exports = router;
+// ── EXPAND USERS ──────────────────────────────────────────────────────────────
+
+async function toggleUsers(portalId, rowEl) {
+  const id       = String(portalId);
+  const usersRow = document.getElementById('users-row-' + id);
+  const chevron  = rowEl.querySelector('.chevron');
+  const isOpen   = expandedPortals.has(id);
+
+  if (isOpen) {
+    expandedPortals.delete(id);
+    usersRow.classList.remove('open');
+    rowEl.classList.remove('expanded');
+    chevron.classList.remove('open');
+  } else {
+    expandedPortals.add(id);
+    usersRow.classList.add('open');
+    rowEl.classList.add('expanded');
+    chevron.classList.add('open');
+    await renderUsers(id);
+  }
+}
+
+async function renderUsers(portalId) {
+  const panel = document.getElementById('users-panel-' + portalId);
+  if (!panel) return;
+
+  if (usersCache[portalId]) {
+    panel.innerHTML = buildUsersHTML(usersCache[portalId], portalId);
+    return;
+  }
+
+  panel.innerHTML = '<div class="users-loading">⏳ Loading users...</div>';
+
+  try {
+    const res  = await fetch(`/admin/api/portals/${portalId}/users`, { credentials: 'include' });
+    const data = await res.json();
+    usersCache[portalId] = data.users || [];
+    panel.innerHTML = buildUsersHTML(usersCache[portalId], portalId);
+  } catch (err) {
+    panel.innerHTML = `<div class="users-loading" style="color:var(--error)">Failed: ${err.message}</div>`;
+  }
+}
+
+function buildUsersHTML(users, portalId) {
+  const header = `<div class="users-panel-title">👥 Users <span>(${users.length})</span></div>`;
+
+  if (!users.length) {
+    return header + `<div class="no-users">
+      No users registered through the SyncStation auth system for this portal.<br>
+      <span style="font-size:12px">This portal connected via HubSpot OAuth only — users sign up separately at /register.</span>
+    </div>`;
+  }
+
+  const rows = users.map(u => {
+    const active  = u.is_active && u.portal_active !== false;
+    const roleCls = u.role === 'owner' ? 'role-owner' : u.role === 'admin' ? 'role-admin' : 'role-user';
+    const verHtml = u.email_verified
+      ? '<span class="verified-badge verified-yes">✓ verified</span>'
+      : '<span class="verified-badge verified-no">⚠ unverified</span>';
+
+    return `<tr>
+      <td>
+        <span class="status-dot ${active ? 'dot-active' : 'dot-inactive'}"></span>
+        <strong>${escHtml(u.full_name || '—')}</strong>
+      </td>
+      <td>
+        <span style="font-family:'DM Mono',monospace;font-size:12px">${escHtml(u.email)}</span>
+        &nbsp;${verHtml}
+      </td>
+      <td><span class="role-badge ${roleCls}">${u.role}</span></td>
+      <td style="color:var(--muted);font-size:12px">${fmtDateTime(u.last_login)}</td>
+      <td style="color:var(--muted);font-size:12px">${fmtDate(u.registered_at || u.invited_at)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm"
+          onclick="sendResetLink(${u.id}, '${escHtml(u.email)}', '${escHtml(u.full_name || '')}')">
+          🔑 Reset Password
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return header + `
+    <table class="users-inner-table">
+      <thead>
+        <tr><th>Name</th><th>Email</th><th>Role</th><th>Last Login</th><th>Joined</th><th>Actions</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── RESET PASSWORD ────────────────────────────────────────────────────────────
+
+async function sendResetLink(userId, email, name) {
+  document.getElementById('resetModalSub').textContent = `Generating link for ${name || email}...`;
+  document.getElementById('resetUrlDisplay').textContent = '⏳ Generating...';
+  document.getElementById('resetEmailStatus').style.display = 'none';
+  document.getElementById('resetUrlOpen').href = '#';
+  document.getElementById('resetOverlay').classList.add('open');
+
+  try {
+    const res  = await fetch(`/admin/api/users/${userId}/send-reset`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      document.getElementById('resetUrlDisplay').textContent = 'Error: ' + (data.error || 'Failed');
+      return;
+    }
+
+    currentResetUrl = data.resetUrl;
+    document.getElementById('resetModalSub').textContent = `For ${data.name || data.email} — expires in 1 hour`;
+    document.getElementById('resetUrlDisplay').textContent = data.resetUrl;
+    document.getElementById('resetUrlOpen').href = data.resetUrl;
+
+    const statusEl = document.getElementById('resetEmailStatus');
+    statusEl.textContent  = data.emailSent
+      ? `✓ Reset email sent to ${data.email}`
+      : `Email not sent (SMTP not configured). Copy the link and share it manually.`;
+    statusEl.className    = 'email-status ' + (data.emailSent ? 'email-sent' : 'email-not-sent');
+    statusEl.style.display = 'block';
+
+  } catch (err) {
+    document.getElementById('resetUrlDisplay').textContent = 'Error: ' + err.message;
+  }
+}
+
+function copyResetUrl() {
+  if (!currentResetUrl) return;
+  navigator.clipboard.writeText(currentResetUrl)
+    .then(() => showToast('✓ Reset link copied'));
+}
+
+function closeResetModal() {
+  document.getElementById('resetOverlay').classList.remove('open');
+  currentResetUrl = '';
+}
+
+document.getElementById('resetOverlay').addEventListener('click', e => {
+  if (e.target.id === 'resetOverlay') closeResetModal();
+});
+
+// ── TIER SAVE ─────────────────────────────────────────────────────────────────
+async function saveTier(portalId) {
+  const tier = document.getElementById('tier-' + portalId).value;
+  try {
+    const res = await fetch(`/admin/api/portals/${portalId}/tier`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier })
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); showToast('✗ ' + (e.error || 'Failed'), true); return; }
+    showToast('✓ Tier updated to ' + tier);
+    loadPortals();
+  } catch (err) { showToast('✗ ' + err.message, true); }
+}
+
+function msgPortal(portalId) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-messages').classList.add('active');
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.getElementById('msgTarget').value = 'specific';
+  document.getElementById('specificPortalGroup').style.display = 'flex';
+  document.getElementById('msgPortalId').value = portalId;
+}
+
+// ── MESSAGES ──────────────────────────────────────────────────────────────────
+async function sendMessage() {
+  const target = document.getElementById('msgTarget').value;
+  const body   = {
+    type:        document.getElementById('msgType').value,
+    title:       document.getElementById('msgTitle').value.trim(),
+    message:     document.getElementById('msgBody').value.trim(),
+    actionLabel: document.getElementById('msgActionLabel').value.trim(),
+    actionUrl:   document.getElementById('msgActionUrl').value.trim()
+  };
+  if (!body.title || !body.message) { showToast('Please fill in title and message', true); return; }
+  if (target === 'specific') body.portalId = document.getElementById('msgPortalId').value.trim();
+  else body.all = true;
+
+  try {
+    const res  = await fetch('/admin/api/notify', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    document.getElementById('msgStatus').textContent = `✓ Sent to ${data.sent} portal(s)`;
+    showToast('✓ Notification sent!');
+    document.getElementById('msgTitle').value = '';
+    document.getElementById('msgBody').value  = '';
+  } catch (err) { showToast('✗ ' + err.message, true); }
+}
+
+function quickMsg(type) {
+  const msgs = {
+    trial_expiring: { title: 'Your free trial is ending soon', message: 'Upgrade now to keep your sync rules active.', type: 'warning' },
+    usage_90:       { title: "You've used 90% of your sync rules", message: 'Upgrade to add more rules.', type: 'warning' },
+    new_feature:    { title: '🎉 New Feature Available', message: "We've added new functionality to SyncStation!", type: 'info' },
+    maintenance:    { title: '🔧 Scheduled Maintenance', message: 'SyncStation will be briefly unavailable for maintenance.', type: 'warning' }
+  };
+  const m = msgs[type];
+  document.getElementById('msgTitle').value = m.title;
+  document.getElementById('msgBody').value  = m.message;
+  document.getElementById('msgType').value  = m.type;
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  document.getElementById('historyContainer').innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Loading...</p></div>';
+  try {
+    const { notifications = [] } = await (await fetch('/admin/api/notifications', { credentials: 'include' })).json();
+    if (!notifications.length) {
+      document.getElementById('historyContainer').innerHTML = '<div class="loading-state"><p>No notifications yet</p></div>';
+      return;
+    }
+    const rows = notifications.map(n => `<tr>
+      <td><span class="mono">${n.portal_id}</span></td>
+      <td><span class="notif-badge notif-${n.type}">${n.type}</span></td>
+      <td>${n.title}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)">${n.message}</td>
+      <td><span class="mono">${n.status}</span></td>
+      <td><span class="mono">${new Date(n.created_at).toLocaleString()}</span></td>
+    </tr>`).join('');
+    document.getElementById('historyContainer').innerHTML = `
+      <table class="portal-table">
+        <thead><tr><th>Portal</th><th>Type</th><th>Title</th><th>Message</th><th>Status</th><th>Sent</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch { document.getElementById('historyContainer').innerHTML = '<div class="loading-state"><p style="color:var(--error)">Failed</p></div>'; }
+}
+
+// ── UTILITIES ─────────────────────────────────────────────────────────────────
+async function runChecks() {
+  document.getElementById('checksStatus').textContent = 'Running...';
+  try {
+    await fetch('/admin/api/run-checks', { method: 'POST', credentials: 'include' });
+    document.getElementById('checksStatus').textContent = '✓ Done';
+    showToast('✓ Automated checks complete');
+    loadPortals();
+  } catch { document.getElementById('checksStatus').textContent = '✗ Failed'; }
+}
+
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+(async () => {
+  const authed = await checkAuth();
+  if (authed) { loadPortals(); setInterval(loadPortals, 60000); }
+})();
+
+
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchTab(portalId, tab) {
+  const usersPanel = document.getElementById('users-panel-' + portalId);
+  const logsPanel  = document.getElementById('logs-panel-' + portalId);
+  const tabUsers   = document.getElementById('tab-users-' + portalId);
+  const tabLogs    = document.getElementById('tab-logs-' + portalId);
+  const tabErrors  = document.getElementById('tab-errors-' + portalId);
+
+  [tabUsers, tabLogs, tabErrors].forEach(b => b && b.classList.remove('active'));
+
+  if (tab === 'users') {
+    usersPanel.style.display = 'block';
+    logsPanel.style.display  = 'none';
+    tabUsers.classList.add('active');
+  } else {
+    usersPanel.style.display = 'none';
+    logsPanel.style.display  = 'block';
+    if (tab === 'logs')   tabLogs.classList.add('active');
+    if (tab === 'errors') tabErrors.classList.add('active');
+    loadLogs(portalId, tab === 'errors' ? 'error' : null);
+  }
+}
+
+async function loadLogs(portalId, statusFilter) {
+  const panel = document.getElementById('logs-panel-' + portalId);
+  panel.innerHTML = '<div class="users-loading">⏳ Loading logs...</div>';
+
+  try {
+    const recordId = document.getElementById('recordSearch-' + portalId)?.value?.trim() || '';
+    const url = `/admin/api/portals/${portalId}/logs?limit=500` + (statusFilter ? `&status=${statusFilter}` : '') + (recordId ? `&recordId=${recordId}` : '');
+    const res  = await fetch(url, { credentials: 'include' });
+    const data = await res.json();
+
+    const s = data.summary || {};
+    const summaryHtml = `
+      <div class="log-summary">
+        <div class="log-summary-item">
+          <div class="log-summary-value log-status-success">${s.success_count || 0}</div>
+          <div class="log-summary-label">Successful</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value log-status-error">${s.error_count || 0}</div>
+          <div class="log-summary-label">Errors</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value log-status-blocked">${s.blocked_count || 0}</div>
+          <div class="log-summary-label">Blocked</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value" style="color:var(--muted);font-size:13px">${s.last_success ? fmtDateTime(s.last_success) : '—'}</div>
+          <div class="log-summary-label">Last Success</div>
+        </div>
+        <div class="log-summary-item">
+          <div class="log-summary-value" style="color:var(--error);font-size:13px">${s.last_error ? fmtDateTime(s.last_error) : 'None'}</div>
+          <div class="log-summary-label">Last Error</div>
+        </div>
+      </div>`;
+
+    if (!data.logs || data.logs.length === 0) {
+      panel.innerHTML = summaryHtml + '<div class="no-users">No logs found for this filter.</div>';
+      return;
+    }
+
+    const rows = data.logs.map(log => {
+      const statusCls = `log-status-${log.status}`;
+      const errHtml   = log.error_message ? `<div class="log-error-msg">⚠ ${escHtml(log.error_message)}</div>` : '';
+      return `<div class="log-row">
+        <span style="font-family:'DM Mono',monospace;color:var(--muted)">${fmtDateTime(log.sync_time)}</span>
+        <span class="${statusCls}" style="font-weight:600;text-transform:uppercase">${log.status}</span>
+        <span style="color:var(--muted)">${log.trigger_type || 'polling'}</span>
+        <span style="font-family:'DM Mono',monospace">${escHtml(log.object_type || '—')}</span>
+        <span>${escHtml(log.rule_name || '—')}${errHtml}</span>
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = summaryHtml +
+      `<div class="log-row log-row-header">
+        <span>Time</span><span>Status</span><span>Trigger</span><span>Object</span><span>Rule / Error</span>
+      </div>` + rows;
+
+  } catch (err) {
+    panel.innerHTML = `<div class="users-loading" style="color:var(--error)">Failed to load logs: ${err.message}</div>`;
+  }
+}
+
+</script>
+
+
+<!-- ── TECHNICAL PRODUCT SPECIALIST ────────────────────────────────────────── -->
+<div class="assistant-section">
+  <div class="assistant-header">
+    <div class="assistant-icon">⚡</div>
+    <div>
+      <div class="assistant-title">Technical Product Specialist</div>
+      <div class="assistant-subtitle">AI-powered — has live access to all portal data, logs, tiers and user info</div>
+    </div>
+  </div>
+
+  <div class="assistant-container">
+    <div class="assistant-messages" id="assistMessages">
+      <div class="assist-msg bot">
+        <div class="assist-avatar bot">⚡</div>
+        <div class="assist-bubble">Hi! I have live access to all portal data. Ask me about sync errors, specific portals, customer issues, or anything across the platform. You can reference a portal by its ID (e.g. "what's happening with portal 45059701").</div>
+      </div>
+    </div>
+
+    <div class="assist-suggestions" id="assistSuggestions">
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Any errors in the last 24h?</span>
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Which portals are on trial?</span>
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Show me platform summary</span>
+      <span class="assist-suggestion" onclick="assistSuggest(this)">Most common error patterns?</span>
+    </div>
+
+    <div class="assistant-input-row">
+      <textarea class="assistant-input" id="assistInput" rows="1" placeholder="Ask about any portal, error, or customer issue..."></textarea>
+      <button class="assistant-send" id="assistSend" onclick="assistSend()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const assistHistory = [];
+
+  function assistAddMessage(role, text) {
+    const msgs  = document.getElementById('assistMessages');
+    const div   = document.createElement('div');
+    div.className = `assist-msg ${role}`;
+    div.innerHTML = `
+      <div class="assist-avatar ${role}">${role === 'bot' ? '⚡' : '👤'}</div>
+      <div class="assist-bubble">${escHtml(text)}</div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  function assistShowTyping() {
+    const msgs = document.getElementById('assistMessages');
+    const div  = document.createElement('div');
+    div.className = 'assist-msg bot';
+    div.id = 'assistTyping';
+    div.innerHTML = `<div class="assist-avatar bot">⚡</div><div class="assist-bubble assist-typing"><div class="assist-dot"></div><div class="assist-dot"></div><div class="assist-dot"></div></div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function assistRemoveTyping() {
+    const t = document.getElementById('assistTyping');
+    if (t) t.remove();
+  }
+
+  async function assistSend() {
+    const input = document.getElementById('assistInput');
+    const btn   = document.getElementById('assistSend');
+    const text  = input.value.trim();
+    if (!text) return;
+
+    // Hide suggestions after first message
+    const sugg = document.getElementById('assistSuggestions');
+    if (sugg) sugg.style.display = 'none';
+
+    input.value   = '';
+    input.style.height = '';
+    btn.disabled  = true;
+
+    assistAddMessage('user', text);
+    assistHistory.push({ role: 'user', content: text });
+    assistShowTyping();
+
+    try {
+      const res  = await fetch('/admin/api/assistant/message', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body:    JSON.stringify({ message: text, history: assistHistory.slice(-10) })
+      });
+      const data = await res.json();
+      assistRemoveTyping();
+
+      const reply = data.reply || data.error || 'No response received.';
+      assistAddMessage('bot', reply);
+      assistHistory.push({ role: 'assistant', content: reply });
+
+    } catch (err) {
+      assistRemoveTyping();
+      assistAddMessage('bot', 'Failed to get a response. Please check your connection.');
+    } finally {
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+
+  window.assistSend = assistSend;
+
+  window.assistSuggest = function(el) {
+    const input = document.getElementById('assistInput');
+    input.value = el.textContent;
+    assistSend();
+  };
+
+  // Auto-resize textarea
+  document.getElementById('assistInput').addEventListener('input', function() {
+    this.style.height = '';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
+  // Send on Enter (Shift+Enter for newline)
+  document.getElementById('assistInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); assistSend(); }
+  });
+})();
+</script>
+
+</body>
+</html>
