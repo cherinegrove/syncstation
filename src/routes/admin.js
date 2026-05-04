@@ -331,6 +331,12 @@ router.get('/portals/:portalId/logs', requireAdmin, async (req, res) => {
       params.push(status);
     }
 
+    const { recordId } = req.query;
+    if (recordId) {
+      query += ` AND (source_record_id = $${params.length + 1} OR target_record_id = $${params.length + 1})`;
+      params.push(recordId);
+    }
+
     query += ` ORDER BY sync_time DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(parseInt(limit), parseInt(offset));
 
