@@ -1,218 +1,259 @@
-// src/routes/webhooks.js - OPTIMIZED VERSION
-const express = require('express');
-const router = express.Router();
+// src/routes/webhooks.js
+const express    = require('express');
+const crypto     = require('crypto');
+const { Pool }   = require('pg');
 const { getClient } = require('../services/hubspotClient');
-const { sync } = require('../services/syncService');
+const { sync }      = require('../services/syncService');
+const { getPortalTier, isObjectAllowed } = require('../services/tierService');
 
-// In-memory store to track our own writes (prevents bidirectional loops)
-const recentWrites = new Map();
+const router = express.Router();
 
-function markWrite(objectType, objectId, properties) {
-  const key = `${objectType}:${objectId}`;
-  recentWrites.set(key, {
-    properties: Object.keys(properties),
-    timestamp: Date.now()
-  });
-  
-  // Clean up after 10 seconds
-  setTimeout(() => recentWrites.delete(key), 10000);
-}
-
-function wasRecentlyWritten(objectType, objectId, propertyName) {
-  const key = `${objectType}:${objectId}`;
-  const write = recentWrites.get(key);
-  
-  if (!write) return false;
-  if (Date.now() - write.timestamp > 10000) {
-    recentWrites.delete(key);
-    return false;
+// ─── DB Pool ──────────────────────────────────────────────────────────────────
+let pool = null;
+function getPool() {
+  if (!pool && process.env.DATABASE_URL) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
   }
-  
-  return write.properties.includes(propertyName);
+  return pool;
 }
 
-// POST /webhooks/receive
-router.post('/receive', async (req, res) => {
+// ─── Webhook Signature Verification ──────────────────────────────────────────
+function verifyWebhookSignature(req) {
+  const secret = process.env.HUBSPOT_CLIENT_SECRET;
+  if (!secret) return true; // skip in dev
+
+  const signature = req.headers['x-hubspot-signature-v3'] || req.headers['x-hubspot-signature'];
+  if (!signature) return false;
+
+  // v3 signature
+  if (req.headers['x-hubspot-signature-v3']) {
+    const timestamp  = req.headers['x-hubspot-request-timestamp'];
+    const uri        = `${process.env.APP_BASE_URL || 'https://portal.syncstation.app'}/webhooks/receive`;
+    const body       = JSON.stringify(req.body);
+    const str        = `${req.method}${uri}${body}${timestamp}`;
+    const hash       = crypto.createHmac('sha256', secret).update(str).digest('hex');
+    return hash === signature;
+  }
+
+  // v1/v2 signature fallback
+  const body = JSON.stringify(req.body);
+  const hash = crypto.createHmac('sha256', secret).update(body).digest('hex');
+  return hash === signature;
+}
+
+// ─── Log webhook sync result ──────────────────────────────────────────────────
+async function logWebhookSync(portalId, objectType, ruleName, status, errorMessage, recordsSynced, sourceRecordId, targetRecordId) {
+  const p = getPool();
+  if (!p) return;
   try {
-    const events = req.body || [];
-    
-    if (!Array.isArray(events) || events.length === 0) {
-      return res.status(200).json({ ok: true, message: 'No events' });
+    await p.query(`
+      INSERT INTO sync_logs
+        (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name, trigger_type, source_record_id, target_record_id)
+      VALUES ($1, NOW(), $2, $3, $4, $5, $6, 'webhook', $7, $8)
+    `, [
+      String(portalId),
+      status,
+      errorMessage || null,
+      recordsSynced || 0,
+      objectType || 'unknown',
+      ruleName || 'webhook',
+      sourceRecordId ? String(sourceRecordId) : null,
+      targetRecordId ? String(targetRecordId) : null
+    ]);
+  } catch (e) {
+    console.error('[Webhooks] Log error:', e.message);
+  }
+}
+
+// ─── Get sync rules for a portal (from DB) ───────────────────────────────────
+async function getSyncRules(portalId) {
+  const p = getPool();
+  if (!p) return [];
+  try {
+    const result = await p.query('SELECT rules FROM sync_rules WHERE portal_id = $1', [String(portalId)]);
+    if (!result.rows.length) return [];
+    const rules = result.rows[0].rules || [];
+    return rules.filter(r => r.enabled !== false);
+  } catch (e) {
+    console.error('[Webhooks] Error fetching rules:', e.message);
+    return [];
+  }
+}
+
+// ─── Build set of all mapped property names for a portal ─────────────────────
+function getMappedFields(rules) {
+  const fields = new Set();
+  for (const rule of rules) {
+    for (const mapping of (rule.mappings || [])) {
+      if (mapping.source) fields.add(mapping.source.toLowerCase());
+      if (mapping.target) fields.add(mapping.target.toLowerCase());
     }
+  }
+  return fields;
+}
 
-    console.log(`[Webhooks] Received ${events.length} event(s)`);
-    if (events.length > 0) {
-      console.log(`[Webhooks] Sample event:`, JSON.stringify(events[0]));
-    }
+// ─── Main webhook receiver ────────────────────────────────────────────────────
+router.post('/receive', async (req, res) => {
+  // Acknowledge immediately — HubSpot retries on slow responses
+  res.status(200).send('OK');
 
-    // Process events asynchronously (don't block HubSpot's webhook)
-    res.status(200).json({ ok: true });
+  const events = Array.isArray(req.body) ? req.body : [req.body];
+  console.log(`[Webhooks] Received ${events.length} event(s)`);
+  if (events.length > 0) {
+    console.log('[Webhooks] Sample event:', JSON.stringify(events[0]));
+  }
 
-    // Process each event
-    for (const event of events) {
-      try {
-        await processWebhookEvent(event);
-      } catch (err) {
-        console.error(`[Webhooks] Error processing event ${event.eventId}:`, err.message);
-      }
-    }
+  // Group events by portal
+  const byPortal = {};
+  for (const event of events) {
+    const pid = String(event.portalId);
+    if (!byPortal[pid]) byPortal[pid] = [];
+    byPortal[pid].push(event);
+  }
 
-  } catch (err) {
-    console.error('[Webhooks] Webhook error:', err.message);
-    res.status(500).json({ error: err.message });
+  for (const [portalId, portalEvents] of Object.entries(byPortal)) {
+    await processPortalEvents(portalId, portalEvents);
   }
 });
 
-// Helper to properly pluralize object types (handles irregular plurals)
-function pluralize(objectType) {
-  if (!objectType) return objectType;
-  if (objectType.endsWith('s')) return objectType;
-  
-  // Handle irregular plurals
-  const irregulars = {
-    'company': 'companies'
-  };
-  
-  return irregulars[objectType] || objectType + 's';
+async function processPortalEvents(portalId, events) {
+  // Load rules and tier once per portal per batch
+  let rules, tierInfo, client;
+  try {
+    rules    = await getSyncRules(portalId);
+    tierInfo = await getPortalTier(portalId);
+    client   = await getClient(portalId);
+  } catch (e) {
+    console.error(`[Webhooks] Setup error for portal ${portalId}:`, e.message);
+    return;
+  }
+
+  if (!rules.length) return;
+
+  const mappedFields = getMappedFields(rules);
+  const OUR_APP_ID   = String(process.env.HUBSPOT_APP_ID || '31781241');
+
+  for (const event of events) {
+    const { subscriptionType, objectId, propertyName, propertyValue, changeSource, sourceId: eventSourceId } = event;
+
+    if (!subscriptionType || !objectId) continue;
+
+    // Parse objectType from subscriptionType (e.g. "company.propertyChange" → "companies")
+    const rawType  = subscriptionType.split('.')[0]; // company, contact, deal, etc.
+    const objectType = rawType.endsWith('y')
+      ? rawType.slice(0, -1) + 'ies'   // company → companies
+      : rawType + 's';                  // contact → contacts, deal → deals
+
+    // ── LOOP PREVENTION (most important) ──────────────────────────────────────
+    // If HubSpot tells us this change was made by our own integration, skip it.
+    // This is more reliable than an in-memory cache and prevents cascade loops.
+    if (changeSource === 'INTEGRATION' && String(eventSourceId) === OUR_APP_ID) {
+      console.log(`[Webhooks] ⏭️  Skipping ${objectType} ${objectId} - ${propertyName} was written by our app`);
+      continue;
+    }
+
+    // Also skip if this is a calculated/internal HubSpot change we don't care about
+    if (changeSource === 'CALCULATED' || changeSource === 'PORTAL_USER_FORCE_SYNC') {
+      if (!mappedFields.has(propertyName?.toLowerCase())) {
+        console.log(`[Webhooks] ⏭️  Skipping ${objectType}.${propertyName} - not in any mapped fields`);
+        continue;
+      }
+    }
+
+    // Check if this property is in any mapped field
+    if (propertyName && !mappedFields.has(propertyName.toLowerCase())) {
+      console.log(`[Webhooks] ⏭️  Skipping ${objectType}.${propertyName} - not in any mapped fields`);
+      continue;
+    }
+
+    // Find matching rules for this objectType + property
+    const matchingRules = rules.filter(rule => {
+      const srcMatch = rule.sourceObject === objectType &&
+        (rule.mappings || []).some(m => m.source?.toLowerCase() === propertyName?.toLowerCase());
+      const tgtMatch = rule.direction === 'two_way' && rule.targetObject === objectType &&
+        (rule.mappings || []).some(m => m.target?.toLowerCase() === propertyName?.toLowerCase());
+      return srcMatch || tgtMatch;
+    });
+
+    if (!matchingRules.length) {
+      console.log(`[Webhooks] ⏭️  Skipping ${objectType}.${propertyName} - not in any mapped fields`);
+      continue;
+    }
+
+    console.log(`[Webhooks] Found ${matchingRules.length} matching rule(s) for ${objectType}.${propertyName}`);
+    console.log(`[Webhooks] ${objectType} ${objectId} - ${propertyName} changed to "${propertyValue}"`);
+
+    // Tier check
+    if (tierInfo.isExpired || !isObjectAllowed(objectType, tierInfo.tier)) {
+      console.log(`[Webhooks] ⛔ Portal ${portalId} tier ${tierInfo.tier} - skipping ${objectType} sync`);
+      await logWebhookSync(portalId, objectType, 'ALL_RULES', 'blocked',
+        `Tier ${tierInfo.tier} - cannot sync`, 0, objectId, null);
+      continue;
+    }
+
+    // Process each matching rule
+    for (const rule of matchingRules) {
+      await processWebhookRule(client, portalId, rule, objectType, objectId);
+    }
+  }
 }
 
-async function processWebhookEvent(event) {
-  const {
-    portalId,
-    objectId,
-    propertyName,
-    propertyValue,
-    subscriptionType
-  } = event;
+async function processWebhookRule(client, portalId, rule, objectType, sourceId) {
+  let sourceObjectType = rule.sourceObject;
+  let targetObjectType = rule.targetObject;
 
-  if (!portalId || !objectId || !propertyName) {
-    console.log('[Webhooks] Skipping event - missing required fields');
-    return;
+  // Handle two_way: if webhook fired on the target object, reverse the sync
+  if (rule.direction === 'two_way' && rule.targetObject === objectType) {
+    sourceObjectType = rule.targetObject;
+    targetObjectType = rule.sourceObject;
   }
 
-  // Extract object type from subscription type (e.g., "contact.propertyChange" → "contacts")
-  const objectType = subscriptionType?.split('.')[0];
-  if (!objectType) {
-    console.log('[Webhooks] Skipping event - could not determine object type');
-    return;
-  }
+  try {
+    const result = await sync(client, {
+      portalId,
+      sourceObjectType,
+      sourceId,
+      targetObjectType,
+      direction:        rule.direction,
+      mappings:         rule.mappings || [],
+      skipIfHasValue:   rule.skipIfHasValue || false,
+      associationRule:  rule.associationRule || 'all',
+      associationLabel: rule.associationLabel || ''
+    });
 
-  // Pluralize object type for API consistency (handle irregular plurals)
-  const pluralObjectType = pluralize(objectType);
+    const synced  = result.updated || 0;
+    const errors  = result.errors  || [];
+    const status  = errors.length > 0 && synced === 0 ? 'error' : 'success';
 
-  // 🔥 CRITICAL: Check if this was written by POLLING to prevent loops
-  const { wasWrittenByPolling } = require('../services/pollingService');
-  if (wasWrittenByPolling(pluralObjectType, String(objectId), propertyName)) {
-    console.log(`[Webhooks] Skipping ${pluralObjectType} ${objectId} - ${propertyName} was written by polling service`);
-    return;
-  }
-
-  // Check if this was our own write (prevent loops)
-  if (wasRecentlyWritten(pluralObjectType, String(objectId), propertyName)) {
-    console.log(`[Webhooks] Skipping ${pluralObjectType} ${objectId} - ${propertyName} was recently written by us`);
-    return;
-  }
-
-  // Get sync rules for this portal
-  const { getRules } = require('./settings');
-  const rules = await getRules(portalId);
-
-  if (!rules || rules.length === 0) {
-    console.log(`[Webhooks] No sync rules for portal ${portalId}`);
-    return;
-  }
-
-  // 🆕 OPTIMIZATION 1: FIELD-LEVEL FILTERING
-  // Find rules that involve this SPECIFIC object type AND property (not just any field)
-  const matchingRules = rules.filter(rule => {
-    if (!rule.enabled) return false;
-    
-    // Check if this object/property is MAPPED in the rule's field mappings
-    const isSourceMapped = rule.sourceObject === pluralObjectType && 
-                           rule.mappings.some(m => m.source === propertyName);
-    
-    const isTargetMapped = rule.direction === 'two_way' && 
-                           rule.targetObject === pluralObjectType && 
-                           rule.mappings.some(m => m.target === propertyName);
-    
-    return isSourceMapped || isTargetMapped;
-  });
-
-  if (matchingRules.length === 0) {
-    console.log(`[Webhooks] ⏭️ Skipping ${pluralObjectType}.${propertyName} - not in any mapped fields`);
-    return;
-  }
-
-  console.log(`[Webhooks] Found ${matchingRules.length} matching rule(s) for ${pluralObjectType}.${propertyName}`);
-  console.log(`[Webhooks] ${pluralObjectType} ${objectId} - ${propertyName} changed to "${propertyValue}"`);
-
-  // Get HubSpot client
-  const client = await getClient(portalId);
-
-  // 🆕 OPTIMIZATION 2: RATE LIMITING
-  // Process each matching rule with delays to prevent hitting rate limits
-  for (let i = 0; i < matchingRules.length; i++) {
-    const rule = matchingRules[i];
-    
-    try {
-      // Determine sync direction based on which object changed
-      let sourceObjectType, targetObjectType;
-      
-      if (rule.sourceObject === pluralObjectType) {
-        // Normal direction: source changed
-        sourceObjectType = rule.sourceObject;
-        targetObjectType = rule.targetObject;
-      } else {
-        // Reverse direction: target changed (bidirectional only)
-        sourceObjectType = rule.targetObject;
-        targetObjectType = rule.sourceObject;
-      }
-
-      console.log(`[Sync] Starting: ${sourceObjectType} ${objectId} -> ${targetObjectType} (${rule.direction})`);
-
-      // For bidirectional syncs: prevent infinite loops by marking the source as "recently written"
-      // When contact.firstname changes → syncs to project.hs_name → project webhook fires
-      // We need to prevent that project webhook from syncing BACK to contact.firstname
-      if (rule.direction === 'two_way') {
-        // Find which source properties are mapped
-        const sourceProperties = rule.mappings.map(m => 
-          rule.sourceObject === sourceObjectType ? m.source : m.target
-        );
-        // Mark all source properties as recently written to prevent reverse sync
-        const propsToMark = {};
-        sourceProperties.forEach(prop => propsToMark[prop] = 'preventLoop');
-        markWrite(sourceObjectType, String(objectId), propsToMark);
-      }
-
-      const result = await sync(client, {
-        portalId,
-        sourceObjectType,
-        sourceId: objectId,
-        targetObjectType,
-        direction: rule.direction,
-        mappings: rule.mappings,
-        skipIfHasValue: rule.skipIfHasValue === 'true',
-        associationRule: rule.assocRule || 'all',
-        associationLabel: rule.assocLabel || '',
-        onWrite: markWrite,
-        ruleSourceObject: rule.sourceObject,
-        ruleTargetObject: rule.targetObject
-      });
-
-      console.log(`[Webhooks] Rule "${rule.name}" synced ${result.updated} record(s) - status: ${result.status}`);
-
-      if (result.errors && result.errors.length > 0) {
-        console.error(`[Webhooks] Rule "${rule.name}" errors:`, result.errors);
-      }
-
-      // 🔥 CRITICAL: Increased delay to prevent rate limiting (500ms matches polling)
-      if (i < matchingRules.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-    } catch (err) {
-      console.error(`[Webhooks] Rule "${rule.name}" failed:`, err.message);
+    console.log(`[Webhooks] Rule "${rule.name}" synced ${synced} record(s) - status: ${status}`);
+    if (errors.length > 0) {
+      console.error(`[Webhooks] Rule "${rule.name}" errors:`, errors);
     }
+
+    // Log per target
+    if (result.targets && result.targets.length > 0) {
+      for (const target of result.targets) {
+        const tStatus = target.status === 'updated' ? 'success'
+                      : target.status === 'error'   ? 'error'
+                      : 'blocked';
+        const tErr    = target.status === 'error' ? (target.error || 'Unknown error') : null;
+        await logWebhookSync(
+          portalId, sourceObjectType, rule.name,
+          tStatus, tErr,
+          target.status === 'updated' ? 1 : 0,
+          String(sourceId), String(target.id)
+        );
+      }
+    } else {
+      await logWebhookSync(portalId, sourceObjectType, rule.name, status, null, synced, String(sourceId), null);
+    }
+
+  } catch (err) {
+    console.error(`[Webhooks] Rule "${rule.name}" error:`, err.message);
+    await logWebhookSync(portalId, sourceObjectType, rule.name, 'error', err.message, 0, String(sourceId), null);
   }
 }
 
