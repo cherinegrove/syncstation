@@ -1,5 +1,6 @@
 // src/routes/settings.js
 const express       = require('express');
+const { requirePortalAccess } = require('../middleware/requirePortalAccess');
 const router        = express.Router();
 const path          = require('path');
 const { getClient } = require('../services/hubspotClient');
@@ -81,9 +82,8 @@ router.get('/', (req, res) => {
 });
 
 // GET /settings/errors - Return sync errors for a portal
-router.get('/errors', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
+router.get('/errors', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
   
   // Prevent browser caching
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -105,9 +105,8 @@ router.delete('/errors', async (req, res) => {
 });
 
 // GET /settings/rules
-router.get('/rules', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
+router.get('/rules', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
   
   // Prevent browser caching of portal-specific data
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -119,9 +118,8 @@ router.get('/rules', async (req, res) => {
 });
 
 // GET /settings/tier - Get portal tier info
-router.get('/tier', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
+router.get('/tier', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
   
   try {
     const tierInfo = await getPortalTier(portalId);
@@ -138,9 +136,9 @@ router.get('/tier', async (req, res) => {
 });
 
 // POST /settings/rules - WITH FIELD TYPE VALIDATION
-router.post('/rules', async (req, res) => {
-  const { portalId, rules } = req.body;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
+router.post('/rules', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const { rules } = req.body;
   
   // CHECK TIER MAPPING LIMIT FIRST
   try {
@@ -621,7 +619,7 @@ router.post('/rules/sync-webhooks', async (req, res) => {
 });
 
 // GET /settings/test-object-access - Test if we can write to a specific object
-router.get('/test-object-access', async (req, res) => {
+router.get('/test-object-access', requirePortalAccess, async (req, res) => {
   const { portalId, objectType } = req.query;
   
   if (!portalId || !objectType) {
