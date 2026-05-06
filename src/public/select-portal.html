@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Select Portal — SyncStation</title>
+<link rel="icon" href="/images/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #0F0F11;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #E8E9F0;
+  }
+
+  .card {
+    background: #18181C;
+    border: 1px solid #343543;
+    border-radius: 12px;
+    max-width: 480px;
+    width: 100%;
+    padding: 40px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .logo img { height: 28px; }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #E8E9F0;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: #7B7C8D;
+    margin-bottom: 28px;
+  }
+
+  .portal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .portal-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #222228;
+    border: 1px solid #343543;
+    border-radius: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .portal-item:hover {
+    border-color: #FF6B35;
+    background: rgba(255,107,53,0.05);
+  }
+
+  .portal-item.selected {
+    border-color: #FF6B35;
+    background: rgba(255,107,53,0.08);
+  }
+
+  .portal-info { flex: 1; }
+
+  .portal-id {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: #E8E9F0;
+  }
+
+  .portal-meta {
+    font-size: 12px;
+    color: #7B7C8D;
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .tier-badge {
+    background: rgba(255,107,53,0.15);
+    color: #FF6B35;
+    border: 1px solid rgba(255,107,53,0.3);
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .connected-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    margin-right: 4px;
+  }
+
+  .not-connected-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef4444;
+    margin-right: 4px;
+  }
+
+  .check-icon {
+    color: #FF6B35;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .portal-item.selected .check-icon { opacity: 1; }
+
+  .btn {
+    width: 100%;
+    background: #FF6B35;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: #ef4444;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+  }
+
+  .loading {
+    text-align: center;
+    color: #7B7C8D;
+    font-size: 14px;
+    padding: 20px 0;
+  }
+
+  .logout-link {
+    text-align: center;
+    margin-top: 20px;
+  }
+
+  .logout-link a {
+    color: #7B7C8D;
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  .logout-link a:hover { color: #E8E9F0; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <img src="/images/SyncStation-Centred@2x.webp" alt="SyncStation">
+  </div>
+
+  <h1>Select a Portal</h1>
+  <p class="subtitle">You have access to multiple HubSpot portals. Choose which one to work in.</p>
+
+  <div id="error" class="error"></div>
+
+  <div id="portalList" class="portal-list">
+    <div class="loading">Loading your portals…</div>
+  </div>
+
+  <button class="btn" id="continueBtn" disabled onclick="selectPortal()">Continue →</button>
+
+  <div class="logout-link">
+    <a href="#" onclick="logout()">Sign out</a>
+  </div>
+</div>
+
+<script>
+let selectedPortalId = null;
+let portals = [];
+
+async function loadPortals() {
+  try {
+    const res  = await fetch('/api/auth/my-portals');
+    const data = await res.json();
+    portals    = data.portals || [];
+
+    if (!portals.length) {
+      document.getElementById('portalList').innerHTML =
+        '<div class="loading">No portals found. Please connect a HubSpot account.</div>';
+      return;
+    }
+
+    // If only one portal — auto-select and continue
+    if (portals.length === 1) {
+      selectedPortalId = portals[0].portal_id;
+      await selectPortal();
+      return;
+    }
+
+    renderPortals();
+  } catch (e) {
+    document.getElementById('portalList').innerHTML =
+      '<div class="loading">Could not load portals. Please refresh.</div>';
+  }
+}
+
+function renderPortals() {
+  const list = document.getElementById('portalList');
+  list.innerHTML = portals.map(p => `
+    <div class="portal-item" id="p-${p.portal_id}" onclick="pick('${p.portal_id}')">
+      <div class="portal-info">
+        <div class="portal-id">Portal ${p.portal_id}</div>
+        <div class="portal-meta">
+          ${p.hub_domain ? `<span>${p.hub_domain}</span>` : ''}
+          ${p.tier ? `<span class="tier-badge">${p.tier}</span>` : ''}
+          <span>
+            <span class="${p.hubspot_connected ? 'connected-dot' : 'not-connected-dot'}"></span>
+            ${p.hubspot_connected ? 'HubSpot connected' : 'Not connected'}
+          </span>
+          <span style="color:#555">${p.role}</span>
+        </div>
+      </div>
+      <span class="check-icon">✓</span>
+    </div>
+  `).join('');
+}
+
+function pick(portalId) {
+  selectedPortalId = portalId;
+  document.querySelectorAll('.portal-item').forEach(el => el.classList.remove('selected'));
+  document.getElementById('p-' + portalId)?.classList.add('selected');
+  document.getElementById('continueBtn').disabled = false;
+}
+
+async function selectPortal() {
+  if (!selectedPortalId) return;
+
+  document.getElementById('continueBtn').disabled = true;
+  document.getElementById('continueBtn').textContent = 'Loading…';
+
+  try {
+    const res  = await fetch('/api/auth/select-portal', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ portalId: selectedPortalId })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Failed to select portal');
+
+    // Redirect — the session now has the portal locked in
+    const redirect = new URLSearchParams(window.location.search).get('redirect') || '/settings';
+    window.location.href = redirect;
+
+  } catch (e) {
+    const err = document.getElementById('error');
+    err.textContent = e.message;
+    err.style.display = 'block';
+    document.getElementById('continueBtn').disabled = false;
+    document.getElementById('continueBtn').textContent = 'Continue →';
+  }
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+loadPortals();
+</script>
+</body>
+</html>
