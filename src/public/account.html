@@ -18,7 +18,7 @@
 
   .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 40px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; isolation: isolate; }
   .logo { display: flex; align-items: center; gap: 12px; font-family: 'DM Mono', monospace; font-size: 18px; flex: 1; }
-  .logo img { width: 170px; height: 48px; display: flex; align-items: center; justify-content: center; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
   .header-nav { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px; border: 1px solid var(--border); position: absolute; left: 50%; transform: translateX(-50%); }
   .header-nav a { text-decoration: none; font-size: 14px; font-weight: 500; padding: 7px 20px; border-radius: 6px; transition: all 0.15s; color: var(--muted); }
   .header-nav a.active { background: var(--bg); color: var(--text); }
@@ -109,7 +109,7 @@
 <body>
 
 <div class="header">
-  <div class="logo"><img src="/images/SyncStation@2x.webp" alt="SyncStation"></div>
+  <div class="logo"><div class="logo-icon" style="background:none;padding:0;"><img src="/images/icon.webp" alt="SS" style="width:32px;height:32px;border-radius:8px;"></div>SyncStation</div>
   <nav class="header-nav">
     <a id="navSettings" href="#">Sync Rules</a>
     <a id="navAccount" href="#" class="active">Account</a>
@@ -145,13 +145,9 @@
   <div class="section-title">Change Plan</div>
   <div class="tiers-grid" id="tiersGrid"></div>
 
-  <!-- HubSpot Connection -->
-  <div style="margin-top:24px;padding:20px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;gap:16px">
-    <div>
-      <div style="font-weight:600;margin-bottom:4px">HubSpot Connection</div>
-      <div style="color:var(--muted);font-size:13px">Reconnect or change your connected HubSpot portal</div>
-    </div>
-    <a href="/oauth/install" style="background:rgba(255,107,53,0.15);border:1px solid rgba(255,107,53,0.4);color:#ff6b35;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500;white-space:nowrap">🔗 Connect HubSpot</a>
+  <!-- HubSpot Connection — rendered dynamically based on actual connection status -->
+  <div id="hubspotConnectionSection" style="margin-top:24px;padding:20px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;gap:16px">
+    <div style="color:var(--muted);font-size:13px">Checking HubSpot connection…</div>
   </div>
 
   <!-- Contact Support & Cancel — side by side -->
@@ -259,15 +255,49 @@
 </div>
 
 <script>
-  const urlParams = new URLSearchParams(window.location.search);
-  const portalId  = urlParams.get('portalId') || localStorage.getItem('syncstation_portal_id') || '';
+  // portalId comes from server session — not URL or localStorage
+  let portalId = '';
 
-  if (portalId) localStorage.setItem('syncstation_portal_id', portalId);
+  async function initPortal() {
+    try {
+      const status = await fetch('/api/auth/hubspot-status').then(r => r.json());
+      portalId = status.portalId || '';
 
-  document.getElementById('portalBadge').textContent = 'Portal ' + (portalId || '—');
-  document.getElementById('navSettings').href = '/settings?portalId=' + portalId;
-  document.getElementById('navAccount').href  = '/account?portalId=' + portalId;
-  document.getElementById('navTeam').href     = '/user-management?portalId=' + portalId;
+      document.getElementById('portalBadge').textContent = 'Portal ' + (portalId || '—');
+      document.getElementById('navSettings').href = '/settings';
+      document.getElementById('navAccount').href  = '/account';
+      document.getElementById('navTeam').href     = '/user-management';
+
+      // Show/hide HubSpot connect section based on actual connection status
+      const hubSection = document.getElementById('hubspotConnectionSection');
+      if (hubSection) {
+        if (status.connected) {
+          hubSection.innerHTML = `
+            <div>
+              <div style="font-weight:600;margin-bottom:4px">HubSpot Connection</div>
+              <div style="color:var(--muted);font-size:13px">
+                Connected${status.hubDomain ? ' — ' + status.hubDomain : ''}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500">✓ Connected</span>
+              <a href="/oauth/install" style="background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.3);color:#ff6b35;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">Reconnect</a>
+            </div>`;
+        } else {
+          hubSection.innerHTML = `
+            <div>
+              <div style="font-weight:600;margin-bottom:4px">HubSpot Connection</div>
+              <div style="color:#ef4444;font-size:13px">⚠️ Not connected — sync is paused</div>
+            </div>
+            <a href="/oauth/install" style="background:rgba(255,107,53,0.2);border:1px solid rgba(255,107,53,0.5);color:#ff6b35;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap">🔗 Connect HubSpot</a>`;
+        }
+      }
+
+      await load();
+    } catch(e) {
+      console.error('Portal init error:', e);
+    }
+  }
 
   const TIERS = {
     trial:    { name: 'Free Trial',  price: 0,     maxMappings: 30,  desc: '7-day free trial' },
@@ -288,7 +318,7 @@
 
   async function load() {
     try {
-      const tierRes = await fetch('/api/account/tier?portalId=' + portalId).then(r => r.json());
+      const tierRes = await fetch('/api/account/tier').then(r => r.json());
 
       currentTier  = tierRes.tier || 'trial';
       currentUsage = tierRes.usage || { rules: 0, mappings: 0, maxMappingsPerRule: 0 };
@@ -533,7 +563,7 @@
   // Start tier monitoring
   function startTierMonitoring() {
     // Load immediately
-    load();
+    initPortal();
     
     // Then check every 30 seconds
     setInterval(() => {
