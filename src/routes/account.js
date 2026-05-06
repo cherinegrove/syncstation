@@ -1,4 +1,5 @@
 // src/routes/account.js
+const { requirePortalAccess } = require('../middleware/requirePortalAccess');
 const express = require('express');
 const router  = express.Router();
 const path    = require('path');
@@ -32,8 +33,8 @@ router.get('/', (req, res) => {
 });
 
 // GET /account/tier
-router.get('/tier', async (req, res) => {
-  const { portalId } = req.query;
+router.get('/tier', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
   if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
 
   const tierInfo = await getPortalTier(portalId);
@@ -70,8 +71,9 @@ router.get('/tier', async (req, res) => {
 });
 
 // POST /account/change-tier — self-serve tier change
-router.post('/change-tier', async (req, res) => {
-  const { portalId, newTier } = req.body;
+router.post('/change-tier', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const { newTier } = req.body;
 
   if (!portalId || !newTier) return res.status(400).json({ error: 'Missing portalId or newTier' });
   if (!TIERS[newTier]) return res.status(400).json({ error: 'Invalid tier' });
