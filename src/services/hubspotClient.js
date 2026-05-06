@@ -223,6 +223,34 @@ async function getClient(portalId) {
   return refreshPromise;
 }
 
+// ─── Background token keepalive ──────────────────────────────────────────────
+// Proactively refreshes all portal tokens every 20 minutes so they never
+// expire between polling cycles or during rate-limit backoff waits.
+async function keepAliveAllTokens() {
+  try {
+    const all = await tokenStore.getAll();
+    for (const [portalId, tokens] of Object.entries(all)) {
+      if (!tokens || !tokens.refresh_token) continue;
+      const expiresIn = tokens.expires_in || 1800;
+      const expiresAt = (tokens.savedAt || 0) + (expiresIn * 1000);
+      const tenMinutes = 10 * 60 * 1000;
+      if (Date.now() > expiresAt - tenMinutes) {
+        try {
+          await getClient(portalId); // triggers refresh internally
+          console.log(`[OAuth] ♻️  Keepalive refreshed token for portal ${portalId}`);
+        } catch (e) {
+          console.error(`[OAuth] Keepalive failed for portal ${portalId}:`, e.message);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[OAuth] Keepalive error:', e.message);
+  }
+}
+
+// Run every 20 minutes
+setInterval(keepAliveAllTokens, 20 * 60 * 1000);
+
 module.exports = {
   getAuthUrl,
   exchangeCode,
