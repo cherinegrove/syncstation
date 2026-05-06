@@ -304,5 +304,172 @@ router.delete('/team/:userId', requireAuth, async (req, res) => {
     }
 });
 
+// ── SELECT PORTAL (multi-portal users) ────────────────────────────────────────
+// Called after login when the user belongs to more than one portal.
+// Updates the current session to lock it to the chosen portal.
+
+router.post('/select-portal', requireAuth, async (req, res) => {
+    try {
+        const { portalId } = req.body;
+        const userId = req.session.userId;
+
+        if (!portalId) return res.status(400).json({ error: 'portalId required' });
+
+        // Verify the user actually belongs to this portal
+        const check = await pool.query(
+            `SELECT role FROM portal_users
+             WHERE user_id = $1 AND portal_id = $2 AND is_active = true`,
+            [userId, String(portalId)]
+        );
+
+        if (!check.rows.length) {
+            return res.status(403).json({ error: 'You do not have access to this portal' });
+        }
+
+        // Update the session to bind it to this portal
+        const token = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+        await pool.query(
+            `UPDATE user_sessions SET portal_id = $1 WHERE token = $2 AND user_id = $3`,
+            [String(portalId), token, userId]
+        );
+
+        res.json({ success: true, portalId });
+
+    } catch (err) {
+        console.error('[Auth] select-portal error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── GET MY PORTALS ────────────────────────────────────────────────────────────
+// Returns all portals the logged-in user has access to.
+
+router.get('/my-portals', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const result = await pool.query(
+            `SELECT pu.portal_id, pu.role, pt.tier,
+                    ht.hub_domain,
+                    CASE WHEN t.data IS NOT NULL THEN true ELSE false END AS hubspot_connected
+             FROM portal_users pu
+             LEFT JOIN portal_tiers pt ON pt.portal_id = pu.portal_id
+             LEFT JOIN hubspot_tokens ht ON ht.portal_id = pu.portal_id
+             LEFT JOIN tokens t ON t.portal_id = pu.portal_id
+             WHERE pu.user_id = $1 AND pu.is_active = true
+             ORDER BY pu.accepted_at ASC`,
+            [userId]
+        );
+        res.json({ portals: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── CHECK HUBSPOT CONNECTION ──────────────────────────────────────────────────
+// Returns whether the current session's portal has a valid HubSpot token.
+
+router.get('/hubspot-status', requireAuth, async (req, res) => {
+    try {
+        const portalId = req.session.portalId;
+        if (!portalId) return res.json({ connected: false, reason: 'no_portal' });
+
+        const result = await pool.query(
+            `SELECT data FROM tokens WHERE portal_id = $1`,
+            [String(portalId)]
+        );
+
+        const token = result.rows[0]?.data;
+        const connected = !!(token?.access_token && token?.refresh_token);
+        const hubDomain = token?.hub_domain || null;
+
+        res.json({ connected, portalId, hubDomain });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── SELECT PORTAL (multi-portal users) ────────────────────────────────────────
+// Called after login when the user belongs to more than one portal.
+// Updates the current session to lock it to the chosen portal.
+
+router.post('/select-portal', requireAuth, async (req, res) => {
+    try {
+        const { portalId } = req.body;
+        const userId = req.session.userId;
+
+        if (!portalId) return res.status(400).json({ error: 'portalId required' });
+
+        // Verify the user actually belongs to this portal
+        const check = await pool.query(
+            `SELECT role FROM portal_users
+             WHERE user_id = $1 AND portal_id = $2 AND is_active = true`,
+            [userId, String(portalId)]
+        );
+
+        if (!check.rows.length) {
+            return res.status(403).json({ error: 'You do not have access to this portal' });
+        }
+
+        // Update the session to bind it to this portal
+        const token = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+        await pool.query(
+            `UPDATE user_sessions SET portal_id = $1 WHERE token = $2 AND user_id = $3`,
+            [String(portalId), token, userId]
+        );
+
+        res.json({ success: true, portalId });
+
+    } catch (err) {
+        console.error('[Auth] select-portal error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── GET MY PORTALS ────────────────────────────────────────────────────────────
+// Returns all portals the logged-in user has access to.
+
+router.get('/my-portals', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const result = await pool.query(
+            `SELECT pu.portal_id, pu.role, pt.tier,
+                    ht.hub_domain,
+                    CASE WHEN t.data IS NOT NULL THEN true ELSE false END AS hubspot_connected
+             FROM portal_users pu
+             LEFT JOIN portal_tiers pt ON pt.portal_id = pu.portal_id
+             LEFT JOIN hubspot_tokens ht ON ht.portal_id = pu.portal_id
+             LEFT JOIN tokens t ON t.portal_id = pu.portal_id
+             WHERE pu.user_id = $1 AND pu.is_active = true
+             ORDER BY pu.accepted_at ASC`,
+            [userId]
+        );
+        res.json({ portals: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── CHECK HUBSPOT CONNECTION ──────────────────────────────────────────────────
+// Returns whether the current session's portal has a valid HubSpot token.
+
+router.get('/hubspot-status', requireAuth, async (req, res) => {
+    try {
+        const portalId = req.session.portalId;
+        if (!portalId) return res.json({ connected: false, reason: 'no_portal' });
+
+        const result = await pool.query(
+            `SELECT data FROM tokens WHERE portal_id = $1`,
+            [String(portalId)]
+        );
+
+        const token = result.rows[0]?.data;
+        const connected = !!(token?.access_token && token?.refresh_token);
+        const hubDomain = token?.hub_domain || null;
+
+        res.json({ connected, portalId, hubDomain });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
-module.exports.requireAuth = requireAuth;
