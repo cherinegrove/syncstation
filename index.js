@@ -95,6 +95,7 @@ app.get('/forgot-password',  (req, res) => res.sendFile(path.join(__dirname, 'sr
 app.get('/reset-password',   (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'reset-password.html')));
 app.get('/user-management',  (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'user-management.html')));
 app.get('/payment-success',  (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'payment-success.html')));
+app.get('/select-portal',    (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'select-portal.html')));
 
 // Email verification page
 app.get('/verify-email', (req, res) => {
