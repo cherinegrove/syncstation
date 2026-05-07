@@ -2045,8 +2045,8 @@
       .catch(() => render());
   }
   
-  // Load error count (with error handling to prevent crashes)
-  loadErrors().catch(err => console.log('Error loading errors:', err));
+  // Boot the page — gets portalId from session then loads everything
+  initSettings();
   
   // Auto-refresh errors every 30 seconds if error log is visible
   setInterval(() => {
