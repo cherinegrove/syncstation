@@ -18,15 +18,15 @@ function getPool() {
 }
 
 // ✅ NEW: Log sync results to database
-async function logSyncResult(portalId, objectType, ruleName, status, errorMessage = null, recordsSynced = 0, sourceRecordId = null, targetRecordId = null) {
+async function logSyncResult(portalId, objectType, ruleName, status, errorMessage = null, recordsSynced = 0) {
   const p = getPool();
   if (!p) return;
   
   try {
     await p.query(`
-      INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name, trigger_type, source_record_id, target_record_id)
-      VALUES ($1, NOW(), $2, $3, $4, $5, $6, 'polling', $7, $8)
-    `, [portalId, status, errorMessage, recordsSynced, objectType, ruleName, sourceRecordId, targetRecordId]);
+      INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name)
+      VALUES ($1, NOW(), $2, $3, $4, $5, $6)
+    `, [portalId, status, errorMessage, recordsSynced, objectType, ruleName]);
   } catch (err) {
     console.error('[Polling] Error logging sync result:', err.message);
   }
@@ -311,23 +311,11 @@ async function pollObjectType(portalId, objectType) {
     const BATCH_SIZE = 1;  // Process ONE record at a time
     const DELAY_BETWEEN_SYNCS = 1200;  // 1.2 seconds between each sync rule execution
     const DELAY_BETWEEN_BATCHES = 8000;  // 8 seconds between batches (records)
-    let currentClient = client; // Track client so we can refresh mid-cycle
     
     for (let batchStart = 0; batchStart < changedRecords.length; batchStart += BATCH_SIZE) {
       const batch = changedRecords.slice(batchStart, batchStart + BATCH_SIZE);
       const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(changedRecords.length / BATCH_SIZE);
-
-      // Refresh token every 20 batches (~2.5 min) to prevent mid-cycle 401 errors
-      // HubSpot tokens expire after 30 min; this keeps them fresh
-      if (batchNum > 1 && (batchNum % 20 === 1)) {
-        try {
-          currentClient = await getClient(portalId);
-          console.log(`[Polling] ♻️  Token refreshed at batch ${batchNum}/${totalBatches} for portal ${portalId}`);
-        } catch (refreshErr) {
-          console.error(`[Polling] Token refresh failed at batch ${batchNum}:`, refreshErr.message);
-        }
-      }
       
       console.log(`[Polling] Processing batch ${batchNum}/${totalBatches} (${batch.length} records)`);
       
@@ -349,7 +337,7 @@ async function pollObjectType(portalId, objectType) {
               targetObjectType = rule.sourceObject;
             }
             
-            const result = await sync(currentClient, {
+            const result = await sync(client, {
               portalId,
               sourceObjectType,
               sourceId,
@@ -364,20 +352,12 @@ async function pollObjectType(portalId, objectType) {
               ruleTargetObject: rule.targetObject   // For mapping reversal
             });
             
-            if (result.status === 'success' || result.status === 'no_updates') {
+            if (result.status === 'success') {
               syncedCount += result.updated;
               console.log(`[Polling] Rule "${rule.name}" synced ${result.updated} record(s)`);
               
-              // ✅ LOG PER-TARGET RECORD
-              if (result.targets && result.targets.length > 0) {
-                for (const target of result.targets) {
-                  const targetStatus = target.status === 'updated' ? 'success' : (target.status === 'error' ? 'error' : 'blocked');
-                  const targetErr    = target.status === 'error' ? (target.error || 'Unknown error') : null;
-                  await logSyncResult(portalId, objectType, rule.name, targetStatus, targetErr, target.status === 'updated' ? 1 : 0, String(sourceId), String(target.id));
-                }
-              } else {
-                await logSyncResult(portalId, objectType, rule.name, 'success', null, result.updated, String(sourceId), null);
-              }
+              // ✅ LOG SUCCESS
+              await logSyncResult(portalId, objectType, rule.name, 'success', null, result.updated);
             }
             
             if (result.errors && result.errors.length > 0) {
@@ -385,7 +365,7 @@ async function pollObjectType(portalId, objectType) {
               
               // ✅ LOG ERRORS
               for (const error of result.errors) {
-                await logSyncResult(portalId, objectType, rule.name, 'error', error.message, 0, String(sourceId), null);
+                await logSyncResult(portalId, objectType, rule.name, 'error', error.message, 0);
               }
             }
             
@@ -444,36 +424,26 @@ async function runPollingCycle() {
     let totalSynced = 0;
     let totalErrors = 0;
     
-    for (const portalId of portals) {
-      // Poll Contacts
-      const contactsResult = await pollObjectType(portalId, 'contacts');
-      totalSynced += contactsResult.synced;
-      totalErrors += contactsResult.errors;
-      
-      // Poll Companies
-      const companiesResult = await pollObjectType(portalId, 'companies');
-      totalSynced += companiesResult.synced;
-      totalErrors += companiesResult.errors;
-      
-      // Poll Deals
-      const dealsResult = await pollObjectType(portalId, 'deals');
-      totalSynced += dealsResult.synced;
-      totalErrors += dealsResult.errors;
-      
-      // Poll Tickets
-      const ticketsResult = await pollObjectType(portalId, 'tickets');
-      totalSynced += ticketsResult.synced;
-      totalErrors += ticketsResult.errors;
-      
-      // Poll Leads
-      const leadsResult = await pollObjectType(portalId, 'leads');
-      totalSynced += leadsResult.synced;
-      totalErrors += leadsResult.errors;
-      
-      // Poll Projects
-      const projectsResult = await pollObjectType(portalId, 'projects');
-      totalSynced += projectsResult.synced;
-      totalErrors += projectsResult.errors;
+    // Run each portal in parallel — prevents slow portals from blocking others.
+    // Each portal still processes its own object types sequentially internally
+    // (to respect HubSpot rate limits per portal token).
+    const portalResults = await Promise.all(portals.map(async (portalId) => {
+      let synced = 0;
+      let errors = 0;
+
+      const objectTypes = ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'];
+      for (const objectType of objectTypes) {
+        const result = await pollObjectType(portalId, objectType);
+        synced += result.synced;
+        errors += result.errors;
+      }
+
+      return { portalId, synced, errors };
+    }));
+
+    for (const { synced, errors } of portalResults) {
+      totalSynced += synced;
+      totalErrors += errors;
     }
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
