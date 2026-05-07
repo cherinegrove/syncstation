@@ -175,7 +175,7 @@ router.get('/callback', async (req, res) => {
         }
 
         // 5. Redirect to settings
-        res.redirect(`/settings?portalId=${portalId}&connected=1`);
+        res.redirect('/settings?connected=1');
 
     } catch (err) {
         console.error('[OAuth] Callback error:', err.response?.data || err.message);
