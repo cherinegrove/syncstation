@@ -108,9 +108,9 @@ router.get('/verify', requireAuth, async (req, res) => {
     try {
         const portals = await pool.query(
             `SELECT pu.portal_id, pu.role,
-                    COALESCE(ht.access_token IS NOT NULL, false) AS hubspot_connected
+                    CASE WHEN t.data IS NOT NULL THEN true ELSE false END AS hubspot_connected
              FROM portal_users pu
-             LEFT JOIN hubspot_tokens ht ON ht.portal_id = pu.portal_id
+             LEFT JOIN tokens t ON t.portal_id = pu.portal_id
              WHERE pu.user_id = $1 AND pu.is_active = true`,
             [req.session.userId]
         ).then(r => r.rows).catch(() => []);
@@ -129,10 +129,11 @@ router.get('/portal/connected', requireAuth, async (req, res) => {
 
     try {
         const result = await pool.query(
-            `SELECT id FROM hubspot_tokens WHERE portal_id = $1 AND access_token IS NOT NULL`,
+            `SELECT portal_id FROM tokens WHERE portal_id = $1`,
             [String(portalId)]
         );
-        res.json({ connected: result.rows.length > 0 });
+        const tokenData = result.rows[0];
+        res.json({ connected: !!tokenData });
     } catch (err) {
         // Never crash the process — table may not exist yet
         console.error('[Auth] portal/connected error:', err.message);
