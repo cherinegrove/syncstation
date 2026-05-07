@@ -1337,10 +1337,20 @@
   let availableObjects = [];
   let syncErrors = [];
 
+  // Set nav links immediately — don't wait for async
+  document.getElementById('navSettings').href = '/settings';
+  document.getElementById('navAccount').href  = '/account';
+  document.getElementById('navTeam').href     = '/user-management';
+
   // Initialise: get portalId from session, then load everything
   async function initSettings() {
     try {
-      const status = await fetch('/api/auth/hubspot-status').then(r => r.json());
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch('/api/auth/hubspot-status', { signal: controller.signal });
+      clearTimeout(timeout);
+      const status = await res.json();
 
       // If no portal in session, redirect to portal selector
       if (!status.portalId) {
@@ -1350,9 +1360,6 @@
 
       portalId = status.portalId;
       document.getElementById('portalBadge').textContent = 'Portal ' + portalId;
-      document.getElementById('navSettings').href = '/settings';
-      document.getElementById('navAccount').href  = '/account';
-      document.getElementById('navTeam').href     = '/user-management';
 
       loadRulesFromServer();
       loadNotifications();
@@ -1360,7 +1367,8 @@
       loadErrorCount();
     } catch (e) {
       console.error('Settings init error:', e);
-      window.location.href = '/login';
+      // On timeout or auth failure, send to login
+      window.location.href = '/login?expired=true';
     }
   }
 
