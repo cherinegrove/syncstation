@@ -256,7 +256,7 @@
                 // If user has no portals yet, send them to connect HubSpot first
                 if (!data.hasPortal) {
                     loginBtn.textContent = 'Redirecting to HubSpot...';
-                    showAlert('Account verified! Now connect your HubSpot portal to continue.', 'success');
+                    showAlert('Account verified! Now connect your HubSpot portal to continue.', 'info');
                     setTimeout(() => {
                         window.location.href = '/oauth/install';
                     }, 1500);
@@ -264,13 +264,14 @@
                 }
 
                 // If user has one portal, go straight to settings
+                // portalId is now in the server session — no need to pass in URL
                 if (data.portals && data.portals.length === 1) {
-                    window.location.href = `/settings?portalId=${data.portalId}`;
+                    window.location.href = '/settings';
                     return;
                 }
 
-                // Multiple portals — go to portal picker (or just use first)
-                window.location.href = `/settings?portalId=${data.portalId}`;
+                // Multiple portals — go to portal picker to choose
+                window.location.href = '/select-portal';
 
             } catch (err) {
                 showAlert(err.message);
