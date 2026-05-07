@@ -428,12 +428,17 @@ async function sync(client, {
         const srcVal = sourceProps[mapping.source];
         const tgtVal = targetProps[mapping.target];
 
+        // Skip if source has no value — never overwrite target data with null
+        if (srcVal === null || srcVal === undefined || srcVal === '') {
+          continue;
+        }
+
         if (skipIfHasValue && tgtVal) {
           console.log(`[Sync] Skipping ${mapping.target} — target already has value "${tgtVal}"`);
           continue;
         }
 
-        propsToUpdate[mapping.target] = srcVal !== undefined ? srcVal : '';
+        propsToUpdate[mapping.target] = srcVal;
       }
 
       if (Object.keys(propsToUpdate).length > 0) {
