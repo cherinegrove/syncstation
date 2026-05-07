@@ -43,8 +43,11 @@ async function requirePortalAccess(req, res, next) {
 
   } catch (err) {
     console.error('[PortalAccess]', err.message);
-    res.clearCookie('sessionToken');
-    return res.status(401).json({ error: 'Invalid or expired session' });
+    // Only clear the cookie if the session is genuinely invalid/expired
+    // Don't clear for DB errors or other transient failures
+    const authError = err.message.includes('Invalid session') || err.message.includes('Session expired') || err.message.includes('Account deactivated');
+    if (authError) res.clearCookie('sessionToken');
+    return res.status(401).json({ error: err.message });
   }
 }
 
