@@ -1364,11 +1364,17 @@
       loadRulesFromServer();
       loadNotifications();
       loadAvailableObjects();
-      loadErrorCount();
+      loadErrors().catch(() => {});
+      checkHubSpotConnection(); // only after portalId is confirmed
     } catch (e) {
-      console.error('Settings init error:', e);
-      // On timeout or auth failure, send to login
-      window.location.href = '/login?expired=true';
+      console.error('Settings init error:', e.message);
+      if (e.name === 'AbortError') {
+        // Timeout — don't log user out, just show a message
+        document.getElementById('portalBadge').textContent = 'Connection slow...';
+        setTimeout(() => initSettings(), 3000); // retry once
+      } else {
+        window.location.href = '/login?expired=true';
+      }
     }
   }
 
@@ -2045,7 +2051,7 @@
       .catch(() => render());
   }
   
-  // Boot the page — gets portalId from session then loads everything
+  // Boot the page — fetches portalId from session then loads everything
   initSettings();
   
   // Auto-refresh errors every 30 seconds if error log is visible
@@ -2193,7 +2199,6 @@
       }
     } catch (e) { /* silently ignore */ }
   }
-  checkHubSpotConnection();
 
 
 
