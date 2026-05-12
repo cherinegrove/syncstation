@@ -124,8 +124,9 @@ router.get('/verify', requireAuth, async (req, res) => {
 // ── PORTAL CONNECTED CHECK ────────────────────────────────────────────────────
 
 router.get('/portal/connected', requireAuth, async (req, res) => {
-    const { portalId } = req.query;
-    if (!portalId) return res.status(400).json({ error: 'portalId required' });
+    // Use portalId from the verified session — never trust query params
+    const portalId = req.user?.portalId;
+    if (!portalId) return res.json({ connected: false });
 
     try {
         const result = await pool.query(
@@ -369,8 +370,9 @@ router.get('/my-portals', requireAuth, async (req, res) => {
 
 router.get('/hubspot-status', requireAuth, async (req, res) => {
     try {
-        const portalId = req.session.portalId;
-        if (!portalId) return res.json({ connected: false, reason: 'no_portal' });
+        // portalId comes from the verified session (req.user), NOT express-session
+        const portalId = req.user?.portalId;
+        if (!portalId) return res.json({ connected: false, portalId: null, reason: 'no_portal' });
 
         const result = await pool.query(
             `SELECT data FROM tokens WHERE portal_id = $1`,
