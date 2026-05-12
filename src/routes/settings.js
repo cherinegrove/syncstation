@@ -91,18 +91,50 @@ router.get('/errors', requirePortalAccess, async (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   
-  // TODO: Implement actual error fetching from sync_logs table
-  // For now, return empty errors to prevent frontend crashes
-  res.json({ errors: [] });
+  const p = getPool();
+  if (!p) return res.json({ errors: [] });
+
+  try {
+    const result = await p.query(`
+      SELECT id, sync_time, status, error_message, object_type, rule_name,
+             COALESCE(trigger_type, 'webhook') AS trigger_type,
+             source_record_id, target_record_id
+      FROM sync_logs
+      WHERE portal_id = $1
+        AND status = 'error'
+      ORDER BY sync_time DESC
+      LIMIT 50
+    `, [String(portalId)]);
+
+    const errors = result.rows.map(r => ({
+      id:             r.id,
+      time:           r.sync_time,
+      message:        r.error_message || 'Unknown error',
+      objectType:     r.object_type,
+      ruleName:       r.rule_name,
+      triggerType:    r.trigger_type,
+      sourceRecordId: r.source_record_id,
+      targetRecordId: r.target_record_id,
+    }));
+
+    res.json({ errors });
+  } catch (e) {
+    console.error('[Settings] errors query failed:', e.message);
+    res.json({ errors: [] });
+  }
 });
 
 // DELETE /settings/errors - Clear all errors for a portal
-router.delete('/errors', async (req, res) => {
-  const { portalId } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
-  
-  // TODO: Implement actual error clearing
-  res.json({ ok: true });
+router.delete('/errors', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const p = getPool();
+  if (!p) return res.json({ ok: true });
+  try {
+    await p.query(`DELETE FROM sync_logs WHERE portal_id = $1 AND status = 'error'`, [String(portalId)]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /settings/rules
