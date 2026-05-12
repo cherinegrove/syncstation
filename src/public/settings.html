@@ -2246,7 +2246,7 @@
           <div class="chat-subtitle">Usually replies instantly</div>
         </div>
       </div>
-      <button class="chat-close" id="chatClose">✕</button>
+      <button class="chat-close" id="chatClose" onclick="document.getElementById('chatWindow').classList.remove('open');document.getElementById('chatBubble').style.display='flex';" title="Close">✕</button>
     </div>
 
     <div class="chat-messages" id="chatMessages">
