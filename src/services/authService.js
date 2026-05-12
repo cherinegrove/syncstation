@@ -91,9 +91,9 @@ class AuthService {
                 [String(portalId)]
             );
 
-            // Update session to include this portal
+            // Update session to include this portal (update ALL active sessions for this user)
             await client.query(
-                `UPDATE user_sessions SET portal_id = $1 WHERE user_id = $2 AND portal_id IS NULL`,
+                `UPDATE user_sessions SET portal_id = $1 WHERE user_id = $2`,
                 [String(portalId), userId]
             );
 
