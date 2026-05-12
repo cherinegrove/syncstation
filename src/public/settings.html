@@ -1381,7 +1381,7 @@
   // Load available objects from HubSpot
   async function loadAvailableObjects() {
     try {
-      const response = await fetch('/settings/objects?portalId=' + portalId);
+      const response = await fetch('/settings/objects');
       const data = await response.json();
       
       // Standard objects that always work
@@ -1734,8 +1734,8 @@
     document.getElementById('propsStatus').textContent = 'Loading...';
     try {
       const [srcRes, tgtRes] = await Promise.all([
-        src ? fetch('/settings/properties/' + src + '?portalId=' + portalId).then(r => r.json()) : Promise.resolve({ properties: [] }),
-        tgt ? fetch('/settings/properties/' + tgt + '?portalId=' + portalId).then(r => r.json()) : Promise.resolve({ properties: [] })
+        src ? fetch('/settings/properties/' + src).then(r => r.json()) : Promise.resolve({ properties: [] }),
+        tgt ? fetch('/settings/properties/' + tgt).then(r => r.json()) : Promise.resolve({ properties: [] })
       ]);
       sourceProps = srcRes.properties || [];
       targetProps = tgtRes.properties || [];
