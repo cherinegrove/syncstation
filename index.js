@@ -79,10 +79,7 @@ app.use('/webhooks',      webhookRoutes);
 app.use('/notifications', notifRoutes);
 
 // ── PAGE ROUTES ───────────────────────────────────────────────────────────────
-
-app.get('/settings', requireAuth, (req, res) => {
-    res.sendFile(path.join(__dirname, 'src', 'public', 'settings.html'));
-});
+// Note: /settings auth is handled inside settingsRoutes (router.get /)
 
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'public', 'admin.html'));
