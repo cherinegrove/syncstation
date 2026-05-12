@@ -76,8 +76,9 @@ const OBJECTS_TO_TEST = [
 const objectsCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// GET /settings
-router.get('/', (req, res) => {
+// GET /settings — requires login
+const { requireAuth } = require('../middleware/requireAuth');
+router.get('/', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '../public/settings.html'));
 });
 
@@ -324,9 +325,9 @@ router.post('/rules', requirePortalAccess, async (req, res) => {
 });
 
 // GET /settings/objects — test each object type and return only accessible ones
-router.get('/objects', async (req, res) => {
-  const { portalId, refresh } = req.query;
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId' });
+router.get('/objects', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const { refresh } = req.query;
 
   // Prevent browser caching of portal-specific data
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -468,11 +469,9 @@ router.get('/objects', async (req, res) => {
 });
 
 // GET /settings/properties/:objectType - NOW WITH FULL TYPE INFO
-router.get('/properties/:objectType', async (req, res) => {
+router.get('/properties/:objectType', requirePortalAccess, async (req, res) => {
   const { objectType } = req.params;
-  const { portalId }   = req.query;
-
-  if (!portalId) return res.status(400).json({ error: 'Missing portalId', properties: [] });
+  const portalId = req.portalId;
 
   try {
     const client = await getClient(portalId);
@@ -531,10 +530,11 @@ router.get('/properties/:objectType', async (req, res) => {
 });
 
 // NEW ENDPOINT: Validate a single mapping
-router.post('/validate-mapping', async (req, res) => {
-  const { portalId, sourceObject, targetObject, sourceProperty, targetProperty } = req.body;
+router.post('/validate-mapping', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const { sourceObject, targetObject, sourceProperty, targetProperty } = req.body;
   
-  if (!portalId || !sourceObject || !targetObject || !sourceProperty || !targetProperty) {
+  if (!sourceObject || !targetObject || !sourceProperty || !targetProperty) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   
@@ -583,7 +583,7 @@ router.post('/validate-mapping', async (req, res) => {
 });
 
 // GET /settings/sync-webhooks
-router.get('/sync-webhooks', async (req, res) => {
+router.get('/sync-webhooks', requirePortalAccess, async (req, res) => {
   try {
     const webhookManager = require('../services/webhookManager');
     const tokenStore     = require('../services/tokenStore');
@@ -601,7 +601,7 @@ router.get('/sync-webhooks', async (req, res) => {
 });
 
 // POST /settings/rules/sync-webhooks
-router.post('/rules/sync-webhooks', async (req, res) => {
+router.post('/rules/sync-webhooks', requirePortalAccess, async (req, res) => {
   try {
     const webhookManager = require('../services/webhookManager');
     const tokenStore     = require('../services/tokenStore');
