@@ -17,16 +17,16 @@ function getPool() {
   return pool;
 }
 
-// ✅ NEW: Log sync results to database
-async function logSyncResult(portalId, objectType, ruleName, status, errorMessage = null, recordsSynced = 0) {
+// ✅ Log sync results to database
+async function logSyncResult(portalId, objectType, ruleName, status, errorMessage = null, recordsSynced = 0, sourceRecordId = null, targetRecordId = null) {
   const p = getPool();
   if (!p) return;
   
   try {
     await p.query(`
-      INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name)
-      VALUES ($1, NOW(), $2, $3, $4, $5, $6)
-    `, [portalId, status, errorMessage, recordsSynced, objectType, ruleName]);
+      INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name, trigger_type, source_record_id, target_record_id)
+      VALUES ($1, NOW(), $2, $3, $4, $5, $6, 'polling', $7, $8)
+    `, [portalId, status, errorMessage, recordsSynced, objectType, ruleName, sourceRecordId ? String(sourceRecordId) : null, targetRecordId ? String(targetRecordId) : null]);
   } catch (err) {
     console.error('[Polling] Error logging sync result:', err.message);
   }
@@ -356,8 +356,16 @@ async function pollObjectType(portalId, objectType) {
               syncedCount += result.updated;
               console.log(`[Polling] Rule "${rule.name}" synced ${result.updated} record(s)`);
               
-              // ✅ LOG SUCCESS
-              await logSyncResult(portalId, objectType, rule.name, 'success', null, result.updated);
+              // ✅ LOG SUCCESS — one row per target record with IDs
+              if (result.targets && result.targets.length > 0) {
+                for (const target of result.targets) {
+                  if (target.status === 'updated') {
+                    await logSyncResult(portalId, objectType, rule.name, 'success', null, 1, sourceId, target.id);
+                  }
+                }
+              } else {
+                await logSyncResult(portalId, objectType, rule.name, 'success', null, result.updated, sourceId, null);
+              }
             }
             
             if (result.errors && result.errors.length > 0) {
@@ -365,7 +373,7 @@ async function pollObjectType(portalId, objectType) {
               
               // ✅ LOG ERRORS
               for (const error of result.errors) {
-                await logSyncResult(portalId, objectType, rule.name, 'error', error.message, 0);
+                await logSyncResult(portalId, objectType, rule.name, 'error', error.message, 0, sourceId, null);
               }
             }
             
