@@ -112,12 +112,12 @@ router.get('/verify', requireAuth, async (req, res) => {
              FROM portal_users pu
              LEFT JOIN tokens t ON t.portal_id = pu.portal_id
              WHERE pu.user_id = $1 AND pu.is_active = true`,
-            [req.session.userId]
+            [req.user.userId]
         ).then(r => r.rows).catch(() => []);
 
-        res.json({ success: true, user: req.session, portals });
+        res.json({ success: true, user: req.user, portals });
     } catch (err) {
-        res.json({ success: true, user: req.session, portals: [] });
+        res.json({ success: true, user: req.user, portals: [] });
     }
 });
 
@@ -185,12 +185,12 @@ router.post('/password-reset/reset', async (req, res) => {
 router.post('/invite', requireAuth, async (req, res) => {
     try {
         const { email, role = 'user' } = req.body;
-        const portalId = req.session.portalId || req.query.portalId || req.body.portalId;
+        const portalId = req.user.portalId || req.query.portalId || req.body.portalId;
 
         if (!portalId) return res.status(400).json({ error: 'No portal associated with this session' });
         if (!email)    return res.status(400).json({ error: 'Email is required' });
 
-        if (!['owner', 'admin'].includes(req.session.role)) {
+        if (!['owner', 'admin'].includes(req.user.role)) {
             return res.status(403).json({ error: 'Only portal owners and admins can invite users' });
         }
 
@@ -209,7 +209,7 @@ router.post('/invite', requireAuth, async (req, res) => {
                 `INSERT INTO portal_users (user_id, portal_id, role, invited_by, accepted_at)
                  VALUES ($1, $2, $3, $4, NOW())
                  ON CONFLICT (user_id, portal_id) DO UPDATE SET is_active = true, role = $3`,
-                [userId, portalId, role, req.session.userId]
+                [userId, portalId, role, req.user.userId]
             );
             return res.json({
                 success:  true,
@@ -224,7 +224,7 @@ router.post('/invite', requireAuth, async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (email, portal_id) DO UPDATE
                SET invite_token = $4, expires_at = $6, role = $3`,
-            [email.toLowerCase(), portalId, role, inviteToken, req.session.userId, inviteExpires]
+            [email.toLowerCase(), portalId, role, inviteToken, req.user.userId, inviteExpires]
         );
 
         const inviteUrl = `${process.env.APP_URL}/register?invite=${inviteToken}`;
@@ -248,7 +248,7 @@ router.post('/invite', requireAuth, async (req, res) => {
 
 router.get('/team', requireAuth, async (req, res) => {
     try {
-        const portalId = req.session.portalId || req.query.portalId;
+        const portalId = req.user.portalId || req.query.portalId;
         if (!portalId) return res.status(400).json({ error: 'portalId required' });
 
         const [usersResult, invitesResult] = await Promise.all([
@@ -285,13 +285,13 @@ router.get('/team', requireAuth, async (req, res) => {
 
 router.delete('/team/:userId', requireAuth, async (req, res) => {
     try {
-        const portalId     = req.session.portalId || req.query.portalId;
+        const portalId     = req.user.portalId || req.query.portalId;
         const targetUserId = parseInt(req.params.userId);
 
-        if (!['owner', 'admin'].includes(req.session.role)) {
+        if (!['owner', 'admin'].includes(req.user.role)) {
             return res.status(403).json({ error: 'Insufficient permissions' });
         }
-        if (targetUserId === req.session.userId) {
+        if (targetUserId === req.user.userId) {
             return res.status(400).json({ error: 'You cannot remove yourself' });
         }
 
@@ -313,7 +313,7 @@ router.delete('/team/:userId', requireAuth, async (req, res) => {
 router.post('/select-portal', requireAuth, async (req, res) => {
     try {
         const { portalId } = req.body;
-        const userId = req.session.userId;
+        const userId = req.user.userId;
 
         if (!portalId) return res.status(400).json({ error: 'portalId required' });
 
@@ -348,7 +348,7 @@ router.post('/select-portal', requireAuth, async (req, res) => {
 
 router.get('/my-portals', requireAuth, async (req, res) => {
     try {
-        const userId = req.session.userId;
+        const userId = req.user.userId;
         const result = await pool.query(
             `SELECT pu.portal_id, pu.role, pt.tier,
                     CASE WHEN t.data IS NOT NULL THEN true ELSE false END AS hubspot_connected
