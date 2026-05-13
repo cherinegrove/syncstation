@@ -1352,13 +1352,15 @@
       clearTimeout(timeout);
       const status = await res.json();
 
-      // If no portal in session, redirect to portal selector
-      if (!status.portalId) {
-        window.location.href = '/select-portal?redirect=/settings';
+      portalId = status.portalId;
+
+      // If still no portalId, show a recoverable error — don't redirect to a loop
+      if (!portalId) {
+        document.getElementById('portalBadge').textContent = 'No portal found';
+        console.warn('[Settings] hubspot-status returned no portalId:', status);
         return;
       }
 
-      portalId = status.portalId;
       document.getElementById('portalBadge').textContent = 'Portal ' + portalId;
 
       loadRulesFromServer();
