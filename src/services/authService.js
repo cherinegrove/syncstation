@@ -71,25 +71,27 @@ class AuthService {
     // Called after HubSpot OAuth completes to connect the account to a portal
 
     async linkUserToPortal(userId, portalId, role = 'owner') {
-        // Ensure the unique constraint exists before using ON CONFLICT
-        await pool.query(`
-            ALTER TABLE portal_users
-            ADD CONSTRAINT IF NOT EXISTS portal_users_user_portal_unique
-            UNIQUE (user_id, portal_id)
-        `).catch(() => {});
-
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
 
-            await client.query(
-                `INSERT INTO portal_users (user_id, portal_id, role, accepted_at)
-                 VALUES ($1, $2, $3, NOW())
-                 ON CONFLICT (user_id, portal_id) DO UPDATE
-                   SET is_active = true, role = EXCLUDED.role`,
+            // UPDATE first — no unique constraint needed
+            const updated = await client.query(
+                `UPDATE portal_users SET is_active = true, role = $3
+                 WHERE user_id = $1 AND portal_id = $2`,
                 [userId, String(portalId), role]
             );
 
+            // INSERT only if nothing was updated
+            if (updated.rowCount === 0) {
+                await client.query(
+                    `INSERT INTO portal_users (user_id, portal_id, role, accepted_at)
+                     VALUES ($1, $2, $3, NOW())`,
+                    [userId, String(portalId), role]
+                ).catch(() => {}); // ignore race-condition duplicate
+            }
+
+            // Set trial tier
             await client.query(
                 `INSERT INTO portal_tiers (portal_id, tier, created_at)
                  VALUES ($1, 'trial', NOW())
@@ -97,6 +99,7 @@ class AuthService {
                 [String(portalId)]
             );
 
+            // Update session
             await client.query(
                 `UPDATE user_sessions SET portal_id = $1 WHERE user_id = $2`,
                 [String(portalId), userId]
@@ -108,13 +111,11 @@ class AuthService {
         } catch (err) {
             await client.query('ROLLBACK').catch(() => {});
             console.error('[Auth] linkUserToPortal error:', err.message);
-
-            // Fallback: always update the session even if the upsert failed
+            // Always update the session even if something else failed
             await pool.query(
                 `UPDATE user_sessions SET portal_id = $1 WHERE user_id = $2`,
                 [String(portalId), userId]
-            ).catch(e => console.error('[Auth] fallback session update failed:', e.message));
-
+            ).catch(() => {});
             return { success: false, error: err.message };
         } finally {
             client.release();
