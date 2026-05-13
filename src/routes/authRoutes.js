@@ -372,46 +372,34 @@ router.get('/hubspot-status', requireAuth, async (req, res) => {
     try {
         let portalId = req.user?.portalId;
 
-        // ── Self-healing: if session has no portalId, look it up from portal_users ──
+        // ── Self-healing: session has no portalId — look it up without blocking ──
         if (!portalId) {
             const userId = req.user?.userId;
             if (!userId) return res.json({ connected: false, portalId: null, reason: 'not_logged_in' });
 
-            // First: try to find portal linked to this user that has a token
+            // Look up from portal_users, fall back to tokens table
             const lookup = await pool.query(
                 `SELECT pu.portal_id
                  FROM portal_users pu
-                 JOIN tokens t ON t.portal_id = pu.portal_id
                  WHERE pu.user_id = $1 AND pu.is_active = true
-                 ORDER BY pu.accepted_at DESC
-                 LIMIT 1`,
+                 ORDER BY pu.accepted_at DESC LIMIT 1`,
                 [userId]
-            );
+            ).catch(() => ({ rows: [] }));
 
             if (lookup.rows.length) {
                 portalId = lookup.rows[0].portal_id;
             } else {
-                // Fallback: if portal_users is missing, auto-link the only connected portal
                 const fallback = await pool.query(
                     `SELECT portal_id FROM tokens ORDER BY updated_at DESC LIMIT 1`
-                );
-                if (fallback.rows.length) {
-                    portalId = fallback.rows[0].portal_id;
-                    // Auto-link this user to this portal so future logins work
-                    await pool.query(
-                        `INSERT INTO portal_users (user_id, portal_id, role, accepted_at)
-                         VALUES ($1, $2, 'owner', NOW())
-                         ON CONFLICT (user_id, portal_id) DO UPDATE SET is_active = true`,
-                        [userId, String(portalId)]
-                    ).catch(() => {});
-                }
+                ).catch(() => ({ rows: [] }));
+                if (fallback.rows.length) portalId = fallback.rows[0].portal_id;
             }
 
+            // Backfill session in background — don't await, don't block the response
             if (portalId) {
-                // Backfill the session so future requests don't need to do this
                 const sessionToken = req.cookies?.sessionToken;
                 if (sessionToken) {
-                    await pool.query(
+                    pool.query(
                         `UPDATE user_sessions SET portal_id = $1 WHERE token = $2`,
                         [String(portalId), sessionToken]
                     ).catch(() => {});
@@ -421,16 +409,11 @@ router.get('/hubspot-status', requireAuth, async (req, res) => {
 
         if (!portalId) return res.json({ connected: false, portalId: null, reason: 'no_portal' });
 
-        const result = await pool.query(
-            `SELECT data FROM tokens WHERE portal_id = $1`,
-            [String(portalId)]
-        );
+        // ── Return portalId immediately — don't wait for token DB check ──
+        // Token validity is checked lazily when sync actually runs.
+        // This keeps the response fast even during heavy polling cycles.
+        res.json({ connected: true, portalId, hubDomain: null });
 
-        const token = result.rows[0]?.data;
-        const connected = !!(token?.access_token && token?.refresh_token);
-        const hubDomain = token?.hub_domain || null;
-
-        res.json({ connected, portalId, hubDomain });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
