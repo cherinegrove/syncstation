@@ -147,7 +147,14 @@
 
   <!-- HubSpot Connection — rendered dynamically based on actual connection status -->
   <div id="hubspotConnectionSection" style="margin-top:24px;padding:20px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;gap:16px">
-    <div style="color:var(--muted);font-size:13px">Checking HubSpot connection…</div>
+    <div>
+      <div style="font-weight:600;margin-bottom:4px">HubSpot Connection</div>
+      <div id="hubspotConnectionStatus" style="color:var(--muted);font-size:13px">Checking connection…</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="hubspotConnectedBadge" style="display:none;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500">✓ Connected</span>
+      <a href="/oauth/install" style="background:rgba(255,107,53,0.2);border:1px solid rgba(255,107,53,0.5);color:#ff6b35;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap" id="hubspotConnectBtn">🔗 Connect HubSpot</a>
+    </div>
   </div>
 
   <!-- Contact Support & Cancel — side by side -->
@@ -268,29 +275,17 @@
       document.getElementById('navAccount').href  = '/account';
       document.getElementById('navTeam').href     = '/user-management';
 
-      // Show/hide HubSpot connect section based on actual connection status
-      const hubSection = document.getElementById('hubspotConnectionSection');
-      if (hubSection) {
-        if (status.connected) {
-          hubSection.innerHTML = `
-            <div>
-              <div style="font-weight:600;margin-bottom:4px">HubSpot Connection</div>
-              <div style="color:var(--muted);font-size:13px">
-                Connected${status.hubDomain ? ' — ' + status.hubDomain : ''}
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500">✓ Connected</span>
-              <a href="/oauth/install" style="background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.3);color:#ff6b35;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">Reconnect</a>
-            </div>`;
-        } else {
-          hubSection.innerHTML = `
-            <div>
-              <div style="font-weight:600;margin-bottom:4px">HubSpot Connection</div>
-              <div style="color:#ef4444;font-size:13px">⚠️ Not connected — sync is paused</div>
-            </div>
-            <a href="/oauth/install" style="background:rgba(255,107,53,0.2);border:1px solid rgba(255,107,53,0.5);color:#ff6b35;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap">🔗 Connect HubSpot</a>`;
-        }
+      // Update connection status text — button is always visible
+      const statusEl = document.getElementById('hubspotConnectionStatus');
+      const badgeEl  = document.getElementById('hubspotConnectedBadge');
+      const btnEl    = document.getElementById('hubspotConnectBtn');
+      if (status.connected) {
+        if (statusEl) statusEl.textContent = status.hubDomain ? 'Connected — ' + status.hubDomain : 'Connected';
+        if (badgeEl)  badgeEl.style.display = '';
+        if (btnEl)    btnEl.textContent = '🔄 Reconnect HubSpot';
+      } else {
+        if (statusEl) statusEl.innerHTML = '⚠️ Not connected — sync is paused';
+        if (statusEl) statusEl.style.color = '#ef4444';
       }
 
       await load();
