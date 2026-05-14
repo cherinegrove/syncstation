@@ -1178,51 +1178,64 @@ let currentEditKey = null;
 async function loadEmailTemplates() {
   const container = document.getElementById('emailTemplatesList');
   if (!container) return;
-  container.innerHTML = '<div style="color:var(--muted);padding:20px">Loading templates...</div>';
+  container.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">Loading...</div>';
   try {
-    const data = await fetch('/admin/api/email-templates').then(r => r.json());
+    const r = await fetch('/admin/api/email-templates');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'API error ' + r.status);
     emailTemplates = data.templates || [];
-    container.innerHTML = emailTemplates.map(t => {
+
+    if (!emailTemplates.length) {
+      container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">' +
+        '<div style="font-size:40px;margin-bottom:16px">📧</div>' +
+        '<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">No templates found</div>' +
+        '<div style="font-size:13px;margin-bottom:24px">Click below to seed the default email templates.</div>' +
+        '<button onclick="seedEmailTemplates()" style="background:var(--accent);color:white;border:none;padding:10px 24px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">⚡ Seed Default Templates</button>' +
+        '</div>';
+      return;
+    }
+
+    let html = '';
+    for (const t of emailTemplates) {
       const j = t.journey || {};
-      const updatedAt = t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—';
-      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
-        <div style="display:flex;align-items:center;gap:16px;flex:1">
-          <div style="width:10px;height:10px;border-radius:50%;background:${t.is_active ? '#22c55e' : '#555'};flex-shrink:0"></div>
-          <div>
-            <div style="font-weight:600;color:var(--text);font-size:14px">${t.name}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:3px">${t.subject}</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:24px;align-items:center">
-          <div style="text-align:center">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Trigger</div>
-            <div style="font-size:13px;color:var(--text);margin-top:2px">${j.trigger_event || '—'}</div>
-          </div>
-          <div style="text-align:center">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Delay</div>
-            <div style="font-size:13px;color:var(--text);margin-top:2px">${j.delay_days || 0} days</div>
-          </div>
-          <div style="text-align:center">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Updated</div>
-            <div style="font-size:13px;color:var(--text);margin-top:2px">${updatedAt}</div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button onclick="openEditor('${t.journey_key}')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit">✏️ Edit</button>
-            <button onclick="quickTestEmail('${t.journey_key}')" style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:7px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit" title="Send test email">⚡</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
+      const updated = t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—';
+      const dot = t.is_active ? '#22c55e' : '#555';
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">';
+      html += '<div style="display:flex;align-items:center;gap:16px;flex:1">';
+      html += '<div style="width:10px;height:10px;border-radius:50%;background:' + dot + ';flex-shrink:0"></div>';
+      html += '<div>';
+      html += '<div style="font-weight:600;color:var(--text);font-size:14px">' + t.name + '</div>';
+      html += '<div style="font-size:12px;color:var(--muted);margin-top:3px">' + t.subject + '</div>';
+      html += '</div></div>';
+      html += '<div style="display:flex;gap:24px;align-items:center">';
+      html += '<div style="text-align:center"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Trigger</div><div style="font-size:13px;color:var(--text);margin-top:2px">' + (j.trigger_event || '—') + '</div></div>';
+      html += '<div style="text-align:center"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Delay</div><div style="font-size:13px;color:var(--text);margin-top:2px">' + (j.delay_days || 0) + ' days</div></div>';
+      html += '<div style="text-align:center"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Updated</div><div style="font-size:13px;color:var(--text);margin-top:2px">' + updated + '</div></div>';
+      html += '<div style="display:flex;gap:8px">';
+      html += '<button onclick="openEditor(\'' + t.journey_key + '\')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit">✏️ Edit</button>';
+      html += '<button onclick="quickTestEmail(\'' + t.journey_key + '\')" style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:7px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit" title="Send test email">⚡</button>';
+      html += '</div></div></div>';
+    }
+    container.innerHTML = html;
   } catch (e) {
-    container.innerHTML = `<div style="color:#ef4444;padding:20px">Failed to load templates: ${e.message}</div>`;
+    container.innerHTML = '<div style="color:#ef4444;padding:20px">Error: ' + e.message + '</div>';
   }
 }
 
+async function seedEmailTemplates() {
+  try {
+    const r = await fetch('/admin/api/email-seed', { method: 'POST', headers: {'Content-Type':'application/json'} });
+    const data = await r.json();
+    if (data.ok) { showToast('✓ ' + data.message); loadEmailTemplates(); }
+    else showToast('✗ ' + data.error, true);
+  } catch (e) { showToast('✗ ' + e.message, true); }
+}
+
 function openEditor(key) {
-  const t = emailTemplates.find(x => x.journey_key === key);
+  const t = emailTemplates.find(function(x) { return x.journey_key === key; });
   if (!t) return;
   currentEditKey = key;
-  document.getElementById('editorTitle').textContent = `Edit: ${t.name}`;
+  document.getElementById('editorTitle').textContent = 'Edit: ' + t.name;
   document.getElementById('edSubject').value  = t.subject || '';
   document.getElementById('edHeading').value  = t.heading || '';
   document.getElementById('edBody').value     = t.body || '';
@@ -1243,15 +1256,16 @@ function closeEditor() {
 function updatePreview() {
   const frame = document.getElementById('emailPreviewFrame');
   if (!frame) return;
-  const heading = document.getElementById('edHeading').value;
-  const body    = (document.getElementById('edBody').value || '').split('
-').map(l =>
-    l.trim() ? `<p style="margin:8px 0;font-size:15px;line-height:1.6;color:#c0c0d0">${l}</p>` : '<br>'
-  ).join('');
-  const btnText = document.getElementById('edBtnText').value;
-  const btnHtml = btnText ? `<div style="text-align:center;margin:28px 0"><a href="#" style="background:#FF6B35;color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">${btnText}</a></div>` : '';
-  const footer  = document.getElementById('edFooter').value;
-  frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="background:#0f0f11;margin:0;padding:24px;font-family:'Helvetica Neue',Arial,sans-serif"><div style="max-width:540px;margin:0 auto;background:#18181c;border-radius:10px;overflow:hidden;border:1px solid #2e2e38"><div style="background:#0f0f11;padding:20px 24px;border-bottom:1px solid #2e2e38"><span style="font-size:18px;font-weight:700;color:#f0f0f4">🔄 SyncStation</span></div><div style="padding:28px 24px"><h1 style="font-size:20px;font-weight:700;color:#f0f0f4;margin:0 0 16px">${heading}</h1>${body}${btnHtml}</div><div style="padding:16px 24px;border-top:1px solid #2e2e38;font-size:12px;color:#55556a">${footer}</div></div></body></html>`;
+  const heading = document.getElementById('edHeading').value || '';
+  const rawBody = document.getElementById('edBody').value || '';
+  const btnText = document.getElementById('edBtnText').value || '';
+  const footer  = document.getElementById('edFooter').value || '';
+  let bodyHtml = '';
+  rawBody.split('\n').forEach(function(l) {
+    bodyHtml += l.trim() ? '<p style="margin:8px 0;font-size:15px;line-height:1.6;color:#c0c0d0">' + l + '</p>' : '<br>';
+  });
+  const btnHtml = btnText ? '<div style="text-align:center;margin:28px 0"><a href="#" style="background:#FF6B35;color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">' + btnText + '</a></div>' : '';
+  frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="background:#0f0f11;margin:0;padding:24px;font-family:Helvetica,Arial,sans-serif"><div style="max-width:540px;margin:0 auto;background:#18181c;border-radius:10px;overflow:hidden;border:1px solid #2e2e38"><div style="background:#0f0f11;padding:20px 24px;border-bottom:1px solid #2e2e38"><span style="font-size:18px;font-weight:700;color:#f0f0f4">🔄 SyncStation</span></div><div style="padding:28px 24px"><h1 style="font-size:20px;font-weight:700;color:#f0f0f4;margin:0 0 16px">' + heading + '</h1>' + bodyHtml + btnHtml + '</div><div style="padding:16px 24px;border-top:1px solid #2e2e38;font-size:12px;color:#55556a">' + footer + '</div></div></body></html>';
 }
 
 async function saveTemplate() {
@@ -1268,34 +1282,30 @@ async function saveTemplate() {
   const delay_days = parseInt(document.getElementById('edDelay').value) || 0;
   try {
     await Promise.all([
-      fetch(`/admin/api/email-templates/${currentEditKey}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-      fetch(`/admin/api/email-journeys/${currentEditKey}`,  { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delay_days, is_active: body.is_active }) })
+      fetch('/admin/api/email-templates/' + currentEditKey, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }),
+      fetch('/admin/api/email-journeys/'  + currentEditKey, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ delay_days: delay_days, is_active: body.is_active }) })
     ]);
     showToast('✓ Template saved');
     closeEditor();
     loadEmailTemplates();
-  } catch (e) {
-    showToast('✗ Save failed: ' + e.message, true);
-  }
+  } catch (e) { showToast('✗ Save failed: ' + e.message, true); }
 }
 
-async function sendTestEmail() {
+function sendTestEmail() {
   const recipient = document.getElementById('testEmailRecipient').value.trim();
   if (!recipient) { showToast('Enter a recipient email address', true); return; }
-  if (!currentEditKey) { showToast('Open a template to test it', true); return; }
-  await quickTestEmail(currentEditKey, recipient);
+  if (!currentEditKey) { showToast('Open a template editor first, then send test', true); return; }
+  quickTestEmail(currentEditKey, recipient);
 }
 
 async function quickTestEmail(key, recipient) {
   const to = recipient || document.getElementById('testEmailRecipient').value.trim();
-  if (!to) { showToast('Enter a recipient email in the test email field first', true); return; }
+  if (!to) { showToast('Enter a recipient email in the test field first', true); return; }
   try {
-    const data = await fetch('/admin/api/email-test', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ journey_key: key, recipient: to })
-    }).then(r => r.json());
-    if (data.ok) showToast(`✓ ${data.message}`);
-    else showToast('✗ ' + data.error, true);
+    const r = await fetch('/admin/api/email-test', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ journey_key: key, recipient: to }) });
+    const data = await r.json();
+    if (data.ok) showToast('✓ ' + data.message);
+    else showToast('✗ ' + (data.error || 'Send failed'), true);
   } catch (e) { showToast('✗ ' + e.message, true); }
 }
 
@@ -1303,36 +1313,29 @@ async function loadEmailLog() {
   document.getElementById('emailLogModal').style.display = 'flex';
   document.getElementById('emailLogContent').innerHTML = '<div style="padding:20px;color:var(--muted)">Loading...</div>';
   try {
-    const data = await fetch('/admin/api/email-log').then(r => r.json());
+    const data = await fetch('/admin/api/email-log').then(function(r) { return r.json(); });
     const logs = data.logs || [];
     if (!logs.length) { document.getElementById('emailLogContent').innerHTML = '<div style="padding:20px;color:var(--muted)">No emails sent yet.</div>'; return; }
-    document.getElementById('emailLogContent').innerHTML = `
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="background:var(--surface2)">
-          <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase">Time</th>
-          <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase">Journey</th>
-          <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase">Recipient</th>
-          <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase">Status</th>
-        </tr></thead>
-        <tbody>${logs.map(l => `<tr style="border-top:1px solid var(--border)">
-          <td style="padding:10px 14px;color:var(--muted);white-space:nowrap">${new Date(l.sent_at).toLocaleString()}</td>
-          <td style="padding:10px 14px;color:var(--text)">${l.journey_key || '—'}</td>
-          <td style="padding:10px 14px;color:var(--text)">${l.recipient}</td>
-          <td style="padding:10px 14px"><span style="color:${l.status === 'sent' ? '#22c55e' : '#ef4444'};font-weight:600">${l.status}</span>${l.error ? `<div style="color:#ef4444;font-size:11px;margin-top:2px">${l.error}</div>` : ''}</td>
-        </tr>`).join('')}</tbody>
-      </table>`;
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--surface2)">';
+    html += '<th style="padding:10px 14px;text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase">Time</th>';
+    html += '<th style="padding:10px 14px;text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase">Journey</th>';
+    html += '<th style="padding:10px 14px;text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase">Recipient</th>';
+    html += '<th style="padding:10px 14px;text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase">Status</th></tr></thead><tbody>';
+    logs.forEach(function(l) {
+      const color = l.status === 'sent' ? '#22c55e' : '#ef4444';
+      html += '<tr style="border-top:1px solid var(--border)">';
+      html += '<td style="padding:10px 14px;color:var(--muted);white-space:nowrap">' + new Date(l.sent_at).toLocaleString() + '</td>';
+      html += '<td style="padding:10px 14px;color:var(--text)">' + (l.journey_key || '—') + '</td>';
+      html += '<td style="padding:10px 14px;color:var(--text)">' + l.recipient + '</td>';
+      html += '<td style="padding:10px 14px"><span style="color:' + color + ';font-weight:600">' + l.status + '</span>' + (l.error ? '<div style="color:#ef4444;font-size:11px">' + l.error + '</div>' : '') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('emailLogContent').innerHTML = html;
   } catch (e) {
-    document.getElementById('emailLogContent').innerHTML = `<div style="padding:20px;color:#ef4444">${e.message}</div>`;
+    document.getElementById('emailLogContent').innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>';
   }
 }
-
-// Attach input listeners for live preview
-document.addEventListener('DOMContentLoaded', () => {
-  ['edSubject','edHeading','edBtnText','edBtnUrl','edFooter'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', updatePreview);
-  });
-});
 
 </script>
 
