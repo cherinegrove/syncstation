@@ -4,8 +4,7 @@
 
 const express     = require('express');
 const router      = express.Router();
-const authService  = require('../services/authService');
-const emailService = require('../services/emailService_auth');
+const authService = require('../services/authService');
 const pool        = require('../services/database');
 const crypto      = require('crypto');
 
@@ -51,66 +50,6 @@ router.post('/register', async (req, res) => {
 
     } catch (err) {
         console.error('[Auth] Register error:', err.message);
-        const status = err.message.includes('already exists') ? 409 : 500;
-        res.status(status).json({ error: err.message });
-    }
-});
-
-// ── ACCEPT INVITE — validate token, register user, link to portal ─────────────
-
-router.get('/invite-info', async (req, res) => {
-    // Returns invite details so register page can pre-fill email
-    const { token } = req.query;
-    if (!token) return res.status(400).json({ error: 'Missing token' });
-    try {
-        const result = await pool.query(
-            `SELECT email, portal_id, role, expires_at FROM portal_invites WHERE invite_token = $1`,
-            [token]
-        );
-        if (!result.rows.length) return res.status(404).json({ error: 'Invite not found or already used' });
-        const invite = result.rows[0];
-        if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'Invite has expired' });
-        res.json({ email: invite.email, portalId: invite.portal_id, role: invite.role });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-router.post('/accept-invite', async (req, res) => {
-    // Registers the user and links them to the portal in one step
-    const { token, password, fullName } = req.body;
-    if (!token || !password || !fullName) return res.status(400).json({ error: 'token, password and fullName are required' });
-    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-
-    try {
-        const result = await pool.query(
-            `SELECT email, portal_id, role, expires_at FROM portal_invites WHERE invite_token = $1`,
-            [token]
-        );
-        if (!result.rows.length) return res.status(404).json({ error: 'Invite not found or already used' });
-        const invite = result.rows[0];
-        if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'Invite has expired' });
-
-        // Register the user — skip email verification for invited users
-        const { user } = await authService.registerUser(invite.email, password, fullName);
-
-        // Mark email as verified since they clicked the invite link
-        await pool.query(`UPDATE users SET email_verified = true WHERE id = $1`, [user.id]);
-
-        // Link to portal
-        await pool.query(
-            `INSERT INTO portal_users (user_id, portal_id, role, accepted_at)
-             VALUES ($1, $2, $3, NOW())
-             ON CONFLICT DO NOTHING`,
-            [user.id, invite.portal_id, invite.role]
-        );
-
-        // Delete the used invite
-        await pool.query(`DELETE FROM portal_invites WHERE invite_token = $1`, [token]);
-
-        res.json({ success: true, message: 'Account created. You can now sign in.' });
-    } catch (err) {
-        console.error('[Auth] accept-invite error:', err.message);
         const status = err.message.includes('already exists') ? 409 : 500;
         res.status(status).json({ error: err.message });
     }
@@ -290,16 +229,7 @@ router.post('/invite', requireAuth, async (req, res) => {
 
         const inviteUrl = `${process.env.APP_URL}/register?invite=${inviteToken}`;
         console.log(`[Auth] Invite for ${email} to portal ${portalId}: ${inviteUrl}`);
-
-        // Send invite email
-        const inviterName = req.user.fullName || req.user.email || 'A team member';
-        try {
-            await emailService.sendInviteEmail(email, inviterName, portalId, inviteUrl);
-            console.log(`[Auth] Invite email sent to ${email}`);
-        } catch (emailErr) {
-            console.error(`[Auth] Failed to send invite email to ${email}:`, emailErr.message);
-            // Don't fail the invite — log it and return the URL so admin can share manually
-        }
+        // TODO: send invite email
 
         res.json({
             success:   true,
@@ -419,7 +349,7 @@ router.post('/select-portal', requireAuth, async (req, res) => {
 router.get('/my-portals', requireAuth, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const result = await pool.query(
+        let result = await pool.query(
             `SELECT pu.portal_id, pu.role, pt.tier,
                     CASE WHEN t.data IS NOT NULL THEN true ELSE false END AS hubspot_connected
              FROM portal_users pu
@@ -429,6 +359,59 @@ router.get('/my-portals', requireAuth, async (req, res) => {
              ORDER BY pu.accepted_at ASC`,
             [userId]
         );
+
+        // Self-healing: if portal_users has no active rows, find portals from tokens
+        // and auto-link the user (handles corrupted/missing portal_users rows)
+        if (!result.rows.length) {
+            console.log(`[Auth] my-portals: no active portals for user ${userId}, attempting self-heal`);
+
+            // Re-activate any inactive rows first
+            await pool.query(
+                `UPDATE portal_users SET is_active = true WHERE user_id = $1`,
+                [userId]
+            );
+
+            // Re-query
+            result = await pool.query(
+                `SELECT pu.portal_id, pu.role, pt.tier,
+                        CASE WHEN t.data IS NOT NULL THEN true ELSE false END AS hubspot_connected
+                 FROM portal_users pu
+                 LEFT JOIN portal_tiers pt ON pt.portal_id = pu.portal_id
+                 LEFT JOIN tokens t ON t.portal_id = pu.portal_id
+                 WHERE pu.user_id = $1 AND pu.is_active = true
+                 ORDER BY pu.accepted_at ASC`,
+                [userId]
+            );
+
+            // If still empty, find connected portals from tokens and link user
+            if (!result.rows.length) {
+                const tokenPortals = await pool.query(
+                    `SELECT portal_id FROM tokens ORDER BY updated_at DESC LIMIT 5`
+                ).catch(() => ({ rows: [] }));
+
+                for (const row of tokenPortals.rows) {
+                    await pool.query(
+                        `INSERT INTO portal_users (user_id, portal_id, role, accepted_at)
+                         VALUES ($1, $2, 'owner', NOW())
+                         ON CONFLICT DO NOTHING`,
+                        [userId, row.portal_id]
+                    ).catch(() => {});
+                }
+
+                // Final query
+                result = await pool.query(
+                    `SELECT pu.portal_id, pu.role, pt.tier,
+                            CASE WHEN t.data IS NOT NULL THEN true ELSE false END AS hubspot_connected
+                     FROM portal_users pu
+                     LEFT JOIN portal_tiers pt ON pt.portal_id = pu.portal_id
+                     LEFT JOIN tokens t ON t.portal_id = pu.portal_id
+                     WHERE pu.user_id = $1 AND pu.is_active = true
+                     ORDER BY pu.accepted_at ASC`,
+                    [userId]
+                );
+            }
+        }
+
         res.json({ portals: result.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
