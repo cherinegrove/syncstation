@@ -461,3 +461,37 @@ router.post('/email-test', requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
+// POST /admin/api/email-seed — seeds default templates if missing
+router.post('/email-seed', requireAdmin, async (req, res) => {
+  try {
+    const p = getPool();
+    const appUrl = process.env.APP_URL || 'https://portal.syncstation.app';
+    const templates = [
+      ['new_account','New Account Welcome','Welcome to SyncStation!','Welcome to SyncStation 🎉','Hi {{name}},\n\nYour account has been created. Connect your HubSpot portal to get started.','Connect HubSpot',appUrl+'/oauth/install',"You received this because an account was created with this address.",'on_register',0],
+      ['verify_email','Email Verification','Verify your SyncStation account','Verify your email address','Hi {{name}},\n\nPlease verify your email to complete setup. This link expires in 24 hours.','Verify Email',appUrl+'/verify-email?token={{token}}',"If you didn't create an account, ignore this email.",'on_register',0],
+      ['forgot_password','Password Reset','Reset your SyncStation password','Reset your password','Hi {{name}},\n\nWe received a request to reset your password. This link expires in 1 hour.','Reset Password',appUrl+'/reset-password?token={{token}}',"This link expires in 1 hour.",'on_forgot_password',0],
+      ['team_invite','Team Invitation','{{inviter}} invited you to join SyncStation',"You've been invited! 🤝",'Hi there,\n\n{{inviter}} has invited you to collaborate on their HubSpot portal on SyncStation.','Accept Invitation','{{invite_url}}',"This invitation expires in 7 days.",'on_invite',0],
+      ['trial_ending_3','Trial Ending (3 days)','Your SyncStation trial ends in 3 days','Your free trial is almost up ⏰','Hi {{name}},\n\nYour SyncStation trial for portal {{portal_id}} ends in 3 days. Upgrade now to keep syncing.','Upgrade Now',appUrl+'/account',"Questions? Reply to this email.",'scheduled',4],
+      ['trial_ended','Trial Ended','Your SyncStation trial has ended','Your trial has ended','Hi {{name}},\n\nYour free trial for portal {{portal_id}} has ended and syncing has been paused. Upgrade to resume.','Choose a Plan',appUrl+'/account',"Need help choosing a plan? Reply to this email.",'scheduled',0],
+      ['account_suspended','Account Suspended','Your SyncStation account has been suspended','Account suspended','Hi {{name}},\n\nYour SyncStation account for portal {{portal_id}} has been suspended. Please update your billing.','Update Billing',appUrl+'/account',"If you think this is a mistake, contact support.",'scheduled',0],
+      ['no_sync_rules','No Sync Rules Set Up',"You haven't set up any sync rules yet",'Ready to start syncing? 🔄','Hi {{name}},\n\nYou connected HubSpot {{days_since}} days ago but have no sync rules yet. Set one up in minutes.','Create a Sync Rule',appUrl+'/settings',"Need help? Reply to this email.",'scheduled',3]
+    ];
+    let inserted = 0;
+    for (const [key,name,subj,head,body,btnTxt,btnUrl,foot,trigger,delay] of templates) {
+      const r = await p.query(
+        `INSERT INTO email_templates (journey_key,name,subject,heading,body,button_text,button_url,footer,is_active,updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,NOW())
+         ON CONFLICT (journey_key) DO NOTHING`,
+        [key,name,subj,head,body,btnTxt,btnUrl,foot]
+      );
+      if (r.rowCount > 0) inserted++;
+      await p.query(
+        `INSERT INTO email_journeys (journey_key,trigger_event,delay_days,is_active)
+         VALUES ($1,$2,$3,true) ON CONFLICT (journey_key) DO NOTHING`,
+        [key,trigger,delay]
+      );
+    }
+    res.json({ ok: true, inserted, message: `${inserted} template(s) seeded` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
