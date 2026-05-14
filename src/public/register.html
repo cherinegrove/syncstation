@@ -134,6 +134,31 @@
         const passInput   = document.getElementById('password');
         const confInput   = document.getElementById('confirmPassword');
 
+        // ── Invite flow ──
+        const urlParams   = new URLSearchParams(window.location.search);
+        const inviteToken = urlParams.get('invite');
+
+        if (inviteToken) {
+            document.querySelector('h1').textContent = 'Accept Your Invitation';
+            fetch('/api/auth/invite-info?token=' + inviteToken)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        document.querySelector('h1').textContent = 'Invite Invalid';
+                        registerBtn.disabled    = true;
+                        registerBtn.textContent = data.error;
+                        return;
+                    }
+                    if (data.email) {
+                        const emailInput    = document.getElementById('email');
+                        emailInput.value    = data.email;
+                        emailInput.readOnly = true;
+                        emailInput.style.opacity = '0.6';
+                    }
+                })
+                .catch(() => {});
+        }
+
         function showAlert(msg, type = 'error') {
             alertBox.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
         }
@@ -178,16 +203,23 @@
             alertBox.innerHTML      = '';
 
             try {
-                const res  = await fetch('/api/auth/register', {
+                const endpoint = inviteToken ? '/api/auth/accept-invite' : '/api/auth/register';
+                const body      = inviteToken
+                    ? { token: inviteToken, password, fullName }
+                    : { email, password, fullName };
+                const res  = await fetch(endpoint, {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify({ email, password, fullName })
+                    body:    JSON.stringify(body)
                 });
                 const data = await res.json();
 
                 if (!res.ok) throw new Error(data.error || 'Registration failed');
 
-                showAlert('Account created! Please check your email to verify, then sign in.', 'success');
+                const successMsg = inviteToken
+                    ? 'Account created! You can now sign in.'
+                    : 'Account created! Please check your email to verify, then sign in.';
+                showAlert(successMsg, 'success');
                 registerBtn.textContent = 'Account Created ✓';
 
                 setTimeout(() => {
