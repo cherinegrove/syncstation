@@ -35,6 +35,7 @@ app.use(session({
     secret:            process.env.SESSION_SECRET || 'syncstation-secret-change-this',
     resave:            false,
     saveUninitialized: false,
+    rolling:           false,
     cookie: {
         secure:   process.env.NODE_ENV === 'production',
         httpOnly: true,
@@ -42,6 +43,14 @@ app.use(session({
         maxAge:   24 * 60 * 60 * 1000
     }
 }));
+
+// Patch: MemoryStore doesn't implement touch() — add a no-op so express-session doesn't crash
+app.use((req, res, next) => {
+    if (req.session && typeof req.session.touch !== 'function') {
+        req.session.touch = () => {};
+    }
+    next();
+});
 
 app.use(express.static('src/public'));
 
