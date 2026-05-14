@@ -161,7 +161,7 @@ router.get('/tier', requirePortalAccess, async (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
-    res.json(tierInfo);
+    res.json({ ...tierInfo, portalId });
   } catch (err) {
     console.error('[Settings] Error getting tier:', err.message);
     res.status(500).json({ error: err.message });
