@@ -13,7 +13,8 @@ async function requireAuth(req, res, next) {
     const token = req.cookies?.sessionToken || req.headers?.authorization?.replace('Bearer ', '');
     if (!token) return res.status(401).json({ error: 'Authentication required' });
     try {
-        req.session = await authService.verifySession(token);
+        // Set req.user — NOT req.session (that belongs to express-session)
+        req.user = await authService.verifySession(token);
         next();
     } catch (err) {
         res.status(401).json({ error: err.message });
