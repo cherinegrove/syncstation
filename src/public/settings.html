@@ -2181,19 +2181,16 @@
   startTierMonitoring();
 
   // ── HUBSPOT CONNECTION CHECK ──────────────────────────────────────────
+  // If portalId is loaded it means the session is valid and a token exists.
+  // No extra DB call needed — just check portalId is truthy.
   async function checkHubSpotConnection() {
-    try {
-      if (!portalId || portalId === 'Demo') return;
-      const res  = await fetch('/api/auth/portal/connected?portalId=' + portalId);
-      const data = await res.json();
-      if (!data.connected) {
-        // Show modal popup
-        document.getElementById('hubspotModal').style.display = 'flex';
-        // Show header button
-        const btn = document.getElementById('hubspotInstallBtn');
-        if (btn) btn.style.display = 'block';
-      }
-    } catch (e) { /* silently ignore */ }
+    if (!portalId || portalId === 'Demo') {
+      // No portal in session — show the connect modal
+      document.getElementById('hubspotModal').style.display = 'flex';
+      const btn = document.getElementById('hubspotInstallBtn');
+      if (btn) btn.style.display = 'block';
+    }
+    // If portalId exists, connection is confirmed — do nothing
   }
 
 
