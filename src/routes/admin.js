@@ -384,8 +384,6 @@ router.get('/logs/errors', requireAdmin, async (req, res) => {
   }
 });
 
-module.exports = router;
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // EMAIL TEMPLATE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -461,3 +459,5 @@ router.post('/email-test', requireAdmin, async (req, res) => {
     else res.status(500).json({ error: 'Email send failed — check RESEND_API_KEY in Railway env vars' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+module.exports = router;
