@@ -325,6 +325,70 @@
     </div>
   </div>
 
+  <!-- ── EMAIL JOURNEYS PANEL ─────────────────────────────────────────── -->
+  <div class="panel" id="panel-email">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div>
+        <h2 style="font-size:20px;font-weight:700;color:var(--text);margin:0">Email Journeys</h2>
+        <p style="color:var(--muted);font-size:13px;margin:4px 0 0">Manage email templates and trigger settings. Run the SQL migration first if this is empty.</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="testEmailRecipient" placeholder="test@example.com" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;width:200px;font-family:inherit">
+        <button onclick="sendTestEmail()" style="background:var(--accent);color:white;border:none;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⚡ Send Test</button>
+        <button onclick="loadEmailLog()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit">📋 Log</button>
+      </div>
+    </div>
+    <div id="emailTemplatesList" style="display:grid;gap:16px">
+      <div style="color:var(--muted);padding:20px;text-align:center">Loading templates... (run email_system_migration.sql in Postgres first if empty)</div>
+    </div>
+
+    <!-- Email Log modal -->
+    <div id="emailLogModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;padding:20px">
+      <div style="background:#18181c;border:1px solid var(--border);border-radius:12px;width:100%;max-width:860px;max-height:80vh;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)">
+          <span style="font-weight:600;font-size:16px;color:var(--text)">Email Send Log</span>
+          <button onclick="document.getElementById('emailLogModal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+        </div>
+        <div id="emailLogContent" style="overflow-y:auto;padding:16px"></div>
+      </div>
+    </div>
+
+    <!-- Template editor modal -->
+    <div id="emailEditorModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000;align-items:center;justify-content:center;padding:20px;overflow-y:auto">
+      <div style="background:#18181c;border:1px solid var(--border);border-radius:12px;width:100%;max-width:980px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)">
+          <span id="editorTitle" style="font-weight:600;font-size:16px;color:var(--text)">Edit Template</span>
+          <button onclick="closeEditor()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr">
+          <div style="padding:24px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:14px">
+            <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Subject</label><input id="edSubject" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
+            <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Heading</label><input id="edHeading" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
+            <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Body &nbsp;<span style="font-size:11px;color:#555;text-transform:none;letter-spacing:0">{{name}} {{portal_id}} {{app_url}} {{token}}</span></label><textarea id="edBody" rows="7" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit;resize:vertical;line-height:1.6"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Button Text</label><input id="edBtnText" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
+              <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Button URL</label><input id="edBtnUrl" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
+            </div>
+            <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Footer</label><input id="edFooter" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
+            <div style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="edActive" style="width:16px;height:16px;accent-color:var(--accent)"><label style="font-size:13px;color:var(--text)">Active (sends on trigger)</label></div>
+            <div style="border-top:1px solid var(--border);padding-top:14px">
+              <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Delay Days <span style="font-size:11px;color:#555;text-transform:none">(scheduled journeys only)</span></label>
+              <input id="edDelay" type="number" min="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit">
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onclick="saveTemplate()" style="flex:1;background:var(--accent);color:white;border:none;padding:10px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Save Template</button>
+              <button onclick="closeEditor()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;font-family:inherit">Cancel</button>
+            </div>
+          </div>
+          <div style="padding:24px;display:flex;flex-direction:column;gap:12px">
+            <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Live Preview</label>
+            <iframe id="emailPreviewFrame" style="flex:1;border:none;border-radius:8px;background:white;min-height:520px;width:100%" srcdoc=""></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── DELETE CONFIRM MODAL ── -->
