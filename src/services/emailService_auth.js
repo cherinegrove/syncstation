@@ -294,4 +294,67 @@ class EmailService {
     }
 }
 
+    /**
+     * Send invite link email — recipient clicks link and sets their own password
+     */
+    async sendInviteEmail(email, inviterName, portalId, inviteUrl) {
+        const mailOptions = {
+            from: `"${this.fromName}" <${this.fromEmail}>`,
+            to: email,
+            subject: `${inviterName} invited you to join SyncStation`,
+            html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f4f4f4; }
+                        .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; }
+                        .header { background: #0F0F11; padding: 30px; text-align: center; }
+                        .header img { height: 32px; }
+                        .header h1 { color: #F0F0F4; font-size: 22px; margin-top: 16px; }
+                        .content { padding: 40px 30px; }
+                        .content p { color: #555; margin-bottom: 16px; }
+                        .button-wrap { text-align: center; margin: 32px 0; }
+                        .button {
+                            display: inline-block;
+                            background: #FF6B35;
+                            color: white !important;
+                            padding: 14px 36px;
+                            text-decoration: none;
+                            border-radius: 6px;
+                            font-weight: 600;
+                            font-size: 15px;
+                        }
+                        .url-fallback { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 4px; padding: 12px; font-size: 12px; word-break: break-all; color: #666; }
+                        .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; background: #f9f9f9; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>🔄 SyncStation</h1>
+                        </div>
+                        <div class="content">
+                            <p>Hi there,</p>
+                            <p><strong>${inviterName}</strong> has invited you to join their HubSpot portal on SyncStation — a tool that automatically syncs property values between CRM objects.</p>
+                            <p>Click the button below to create your account and get started. The link expires in 7 days.</p>
+                            <div class="button-wrap">
+                                <a href="${inviteUrl}" class="button">Accept Invite & Set Password</a>
+                            </div>
+                            <p style="font-size:13px;color:#888;">If the button doesn't work, copy and paste this link into your browser:</p>
+                            <div class="url-fallback">${inviteUrl}</div>
+                        </div>
+                        <div class="footer">
+                            <p>If you weren't expecting this invitation, you can safely ignore this email.</p>
+                            <p>© ${new Date().getFullYear()} SyncStation. All rights reserved.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `
+        };
+        return this.transporter.sendMail(mailOptions);
+    }
+
+
 module.exports = new EmailService();
