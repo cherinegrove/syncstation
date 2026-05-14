@@ -219,8 +219,8 @@ async function loadPortals() {
     portals    = data.portals || [];
 
     if (!portals.length) {
-      document.getElementById('portalList').innerHTML =
-        '<div class="loading">No portals found. Please connect a HubSpot account.</div>';
+      // No portals at all — send to connect HubSpot
+      window.location.href = '/oauth/install';
       return;
     }
 
