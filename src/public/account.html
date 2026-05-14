@@ -147,14 +147,7 @@
 
   <!-- HubSpot Connection — rendered dynamically based on actual connection status -->
   <div id="hubspotConnectionSection" style="margin-top:24px;padding:20px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;gap:16px">
-    <div>
-      <div style="font-weight:600;margin-bottom:4px">HubSpot Connection</div>
-      <div id="hubspotConnectionStatus" style="color:var(--muted);font-size:13px">Checking connection…</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <span id="hubspotConnectedBadge" style="display:none;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500">✓ Connected</span>
-      <a href="/oauth/install" style="background:rgba(255,107,53,0.2);border:1px solid rgba(255,107,53,0.5);color:#ff6b35;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap" id="hubspotConnectBtn">🔗 Connect HubSpot</a>
-    </div>
+    <div style="color:var(--muted);font-size:13px">Checking HubSpot connection…</div>
   </div>
 
   <!-- Contact Support & Cancel — side by side -->
@@ -267,30 +260,29 @@
 
   async function initPortal() {
     try {
-      const status = await fetch('/api/auth/hubspot-status').then(r => r.json());
-      portalId = status.portalId || '';
+      // Use /api/account/tier — fast, auth-protected, already returns portalId
+      const tierData = await fetch('/api/account/tier').then(r => {
+        if (r.status === 401 || r.status === 403) { window.location.href = '/login?expired=true'; throw new Error('auth'); }
+        return r.json();
+      });
+      portalId = tierData.portalId || '';
 
       document.getElementById('portalBadge').textContent = 'Portal ' + (portalId || '—');
       document.getElementById('navSettings').href = '/settings';
       document.getElementById('navAccount').href  = '/account';
       document.getElementById('navTeam').href     = '/user-management';
 
-      // Update connection status text — button is always visible
+      // Update connection section — button is always visible (set in HTML)
       const statusEl = document.getElementById('hubspotConnectionStatus');
       const badgeEl  = document.getElementById('hubspotConnectedBadge');
       const btnEl    = document.getElementById('hubspotConnectBtn');
-      if (status.connected) {
-        if (statusEl) statusEl.textContent = status.hubDomain ? 'Connected — ' + status.hubDomain : 'Connected';
-        if (badgeEl)  badgeEl.style.display = '';
-        if (btnEl)    btnEl.textContent = '🔄 Reconnect HubSpot';
-      } else {
-        if (statusEl) statusEl.innerHTML = '⚠️ Not connected — sync is paused';
-        if (statusEl) statusEl.style.color = '#ef4444';
-      }
+      if (statusEl) statusEl.textContent = portalId ? 'Connected — Portal ' + portalId : 'Not connected';
+      if (badgeEl && portalId) badgeEl.style.display = '';
+      if (btnEl) btnEl.textContent = portalId ? '🔄 Reconnect HubSpot' : '🔗 Connect HubSpot';
 
       await load();
     } catch(e) {
-      console.error('Portal init error:', e);
+      if (e.message !== 'auth') console.error('Portal init error:', e);
     }
   }
 
