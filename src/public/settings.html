@@ -1345,19 +1345,18 @@
   // Initialise: get portalId from session, then load everything
   async function initSettings() {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000); // increased — allows time during heavy polling
+      // /settings/tier is fast (<100ms), already auth-protected, and now returns portalId
+      const tierRes  = await fetch('/settings/tier');
+      if (tierRes.status === 401 || tierRes.status === 403) {
+        window.location.href = '/login?expired=true';
+        return;
+      }
+      const tierData = await tierRes.json();
+      portalId = tierData.portalId || '';
 
-      const res = await fetch('/api/auth/hubspot-status', { signal: controller.signal });
-      clearTimeout(timeout);
-      const status = await res.json();
-
-      portalId = status.portalId;
-
-      // If still no portalId, show a recoverable error — don't redirect to a loop
       if (!portalId) {
-        document.getElementById('portalBadge').textContent = 'No portal found';
-        console.warn('[Settings] hubspot-status returned no portalId:', status);
+        document.getElementById('portalBadge').textContent = 'No portal — reconnect HubSpot';
+        console.warn('[Settings] tier endpoint returned no portalId:', tierData);
         return;
       }
 
@@ -1367,16 +1366,11 @@
       loadNotifications();
       loadAvailableObjects();
       loadErrors().catch(() => {});
-      checkHubSpotConnection(); // only after portalId is confirmed
+      checkHubSpotConnection(); // fires in background, doesn't block the page
     } catch (e) {
       console.error('Settings init error:', e.message);
-      if (e.name === 'AbortError') {
-        // Timeout — don't log user out, just show a message
-        document.getElementById('portalBadge').textContent = 'Connection slow...';
-        setTimeout(() => initSettings(), 3000); // retry once
-      } else {
-        window.location.href = '/login?expired=true';
-      }
+      document.getElementById('portalBadge').textContent = 'Connection slow...';
+      setTimeout(() => initSettings(), 3000);
     }
   }
 
