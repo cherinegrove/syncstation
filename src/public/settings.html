@@ -1361,6 +1361,10 @@
       }
 
       document.getElementById('portalBadge').textContent = 'Portal ' + portalId;
+      // Clean up any stale ?portalId= from the URL bar
+      if (window.location.search.includes('portalId')) {
+        window.history.replaceState({}, '', '/settings');
+      }
 
       loadRulesFromServer();
       loadNotifications();
@@ -1433,7 +1437,7 @@
   // Load sync errors
   async function loadErrors() {
     try {
-      const res = await fetch('/settings/errors?portalId=' + portalId);
+      const res = await fetch('/settings/errors');
       if (!res.ok) {
         console.log('Error endpoint returned:', res.status);
         return;
@@ -1478,7 +1482,7 @@
     if (!await syncConfirm('Are you sure you want to clear all sync errors?', 'Clear Errors', 'Clear All')) return;
     
     try {
-      await fetch('/settings/errors?portalId=' + portalId, { method: 'DELETE' });
+      await fetch('/settings/errors', { method: 'DELETE' });
       syncErrors = [];
       document.getElementById('statErrors').textContent = '0';
       loadErrors();
@@ -1773,7 +1777,7 @@
   // Check if user can add more property mappings
   async function canAddMapping() {
     try {
-      const response = await fetch('/settings/tier?portalId=' + portalId);
+      const response = await fetch('/settings/tier');
       const data = await response.json();
       
       const tier = data.tier || 'trial';
@@ -2056,7 +2060,7 @@
       loadErrors().catch(err => console.log('Error loading errors:', err));
     } else {
       // Just update the count
-      fetch('/settings/errors?portalId=' + portalId)
+      fetch('/settings/errors')
         .then(r => r.json())
         .then(data => {
           document.getElementById('statErrors').textContent = (data.errors || []).length;
@@ -2112,7 +2116,7 @@
   
   async function checkTierAndShowUpgrade() {
     try {
-      const response = await fetch('/settings/tier?portalId=' + portalId);
+      const response = await fetch('/settings/tier');
       const data = await response.json();
 
       const tier = data.tier || 'trial';
