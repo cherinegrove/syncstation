@@ -292,7 +292,6 @@ class EmailService {
         
         return this.transporter.sendMail(mailOptions);
     }
-}
 
     /**
      * Send invite link email — recipient clicks link and sets their own password
@@ -355,6 +354,6 @@ class EmailService {
         };
         return this.transporter.sendMail(mailOptions);
     }
-
+}
 
 module.exports = new EmailService();
