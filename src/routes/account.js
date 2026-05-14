@@ -65,6 +65,7 @@ router.get('/tier', requirePortalAccess, async (req, res) => {
   
   res.json({
     ...tierInfo,
+    portalId,
     trial_started_at,
     usage: { rules: rules.length, mappings: totalMappings, maxMappingsPerRule }
   });
