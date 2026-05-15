@@ -391,6 +391,26 @@ router.get('/logs/errors', requireAdmin, async (req, res) => {
 router.get('/email-templates', requireAdmin, async (req, res) => {
   try {
     const p = getPool();
+    // Auto-create tables if they don't exist yet
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS email_templates (
+        id SERIAL PRIMARY KEY, journey_key VARCHAR(64) UNIQUE NOT NULL,
+        name VARCHAR(128) NOT NULL, subject TEXT NOT NULL, heading TEXT NOT NULL,
+        body TEXT NOT NULL, button_text TEXT, button_url TEXT, footer TEXT,
+        is_active BOOLEAN DEFAULT true, updated_at TIMESTAMPTZ DEFAULT NOW(), updated_by TEXT
+      )`);
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS email_journeys (
+        id SERIAL PRIMARY KEY, journey_key VARCHAR(64) UNIQUE NOT NULL,
+        trigger_event VARCHAR(64) NOT NULL, delay_days INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true, last_run TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS email_log (
+        id SERIAL PRIMARY KEY, journey_key VARCHAR(64), recipient TEXT NOT NULL,
+        portal_id TEXT, subject TEXT, status VARCHAR(16) DEFAULT 'sent',
+        error TEXT, sent_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
     const [tmplResult, journeyResult] = await Promise.all([
       p.query('SELECT * FROM email_templates ORDER BY journey_key ASC'),
       p.query('SELECT * FROM email_journeys ORDER BY journey_key ASC')
@@ -466,6 +486,10 @@ module.exports = router;
 router.post('/email-seed', requireAdmin, async (req, res) => {
   try {
     const p = getPool();
+    // Ensure tables exist before seeding
+    await p.query(`CREATE TABLE IF NOT EXISTS email_templates (id SERIAL PRIMARY KEY, journey_key VARCHAR(64) UNIQUE NOT NULL, name VARCHAR(128) NOT NULL, subject TEXT NOT NULL, heading TEXT NOT NULL, body TEXT NOT NULL, button_text TEXT, button_url TEXT, footer TEXT, is_active BOOLEAN DEFAULT true, updated_at TIMESTAMPTZ DEFAULT NOW(), updated_by TEXT)`);
+    await p.query(`CREATE TABLE IF NOT EXISTS email_journeys (id SERIAL PRIMARY KEY, journey_key VARCHAR(64) UNIQUE NOT NULL, trigger_event VARCHAR(64) NOT NULL, delay_days INTEGER DEFAULT 0, is_active BOOLEAN DEFAULT true, last_run TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW())`);
+    await p.query(`CREATE TABLE IF NOT EXISTS email_log (id SERIAL PRIMARY KEY, journey_key VARCHAR(64), recipient TEXT NOT NULL, portal_id TEXT, subject TEXT, status VARCHAR(16) DEFAULT 'sent', error TEXT, sent_at TIMESTAMPTZ DEFAULT NOW())`);
     const appUrl = process.env.APP_URL || 'https://portal.syncstation.app';
     const templates = [
       ['new_account','New Account Welcome','Welcome to SyncStation!','Welcome to SyncStation 🎉','Hi {{name}},\n\nYour account has been created. Connect your HubSpot portal to get started.','Connect HubSpot',appUrl+'/oauth/install',"You received this because an account was created with this address.",'on_register',0],
