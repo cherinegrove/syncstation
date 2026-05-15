@@ -365,9 +365,10 @@
             <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Subject</label><input id="edSubject" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
             <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Heading</label><input id="edHeading" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
             <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Body &nbsp;<span style="font-size:11px;color:#555;text-transform:none;letter-spacing:0">{{name}} {{portal_id}} {{app_url}} {{token}}</span></label><textarea id="edBody" rows="7" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit;resize:vertical;line-height:1.6"></textarea></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:10px">
               <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Button Text</label><input id="edBtnText" oninput="updatePreview()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
               <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Button URL</label><input id="edBtnUrl" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
+              <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Colour</label><input id="edBtnColor" type="color" oninput="updatePreview()" value="#FF6B35" style="width:100%;height:38px;margin-top:6px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:none;padding:2px"></div>
             </div>
             <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
               <div><label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Logo URL <span style="font-size:10px;text-transform:none;color:#555">image link</span></label><input id="edLogo" oninput="updatePreview()" placeholder="https://..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13px;margin-top:6px;box-sizing:border-box;font-family:inherit"></div>
@@ -1250,6 +1251,7 @@ function openEditor(key) {
   document.getElementById('edDelay').value    = (t.journey && t.journey.delay_days) || 0;
   document.getElementById('edLogo').value     = t.logo_url || '';
   document.getElementById('edHero').value     = t.hero_image_url || '';
+  document.getElementById('edBtnColor').value = t.button_color || '#FF6B35';
   document.getElementById('emailEditorModal').style.display = 'flex';
   updatePreview();
 }
@@ -1272,7 +1274,8 @@ function updatePreview() {
   rawBody.split('\n').forEach(function(l) {
     bodyHtml += l.trim() ? '<p style="margin:8px 0;font-size:15px;line-height:1.6;color:#c0c0d0">' + l + '</p>' : '<br>';
   });
-  const btnHtml  = btnText ? '<div style="text-align:center;margin:28px 0"><a href="#" style="background:#FF6B35;color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">' + btnText + '</a></div>' : '';
+  const btnColor = (document.getElementById('edBtnColor') ? document.getElementById('edBtnColor').value : null) || '#FF6B35';
+  const btnHtml  = btnText ? '<div style="text-align:center;margin:28px 0"><a href="#" style="background:' + btnColor + ';color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">' + btnText + '</a></div>' : '';
   const logoHtml = logoUrl ? '<img src="' + logoUrl + '" alt="Logo" style="height:32px;object-fit:contain;vertical-align:middle;margin-right:8px">' : '<span style="font-size:18px">🔄</span> ';
   const heroHtml = heroUrl ? '<div style="margin:-28px -24px 24px"><img src="' + heroUrl + '" alt="" style="width:100%;max-height:180px;object-fit:cover;display:block"></div>' : '';
   frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="background:#0f0f11;margin:0;padding:24px;font-family:Helvetica,Arial,sans-serif"><div style="max-width:540px;margin:0 auto;background:#18181c;border-radius:10px;overflow:hidden;border:1px solid #2e2e38"><div style="background:#0f0f11;padding:20px 24px;border-bottom:1px solid #2e2e38;display:flex;align-items:center">' + logoHtml + '<span style="font-size:17px;font-weight:700;color:#f0f0f4">SyncStation</span></div><div style="padding:28px 24px">' + heroHtml + '<h1 style="font-size:20px;font-weight:700;color:#f0f0f4;margin:0 0 16px">' + heading + '</h1>' + bodyHtml + btnHtml + '</div><div style="padding:16px 24px;border-top:1px solid #2e2e38;font-size:12px;color:#55556a">' + footer + '</div></div></body></html>';
@@ -1289,7 +1292,8 @@ async function saveTemplate() {
     footer:         document.getElementById('edFooter').value,
     is_active:      document.getElementById('edActive').checked,
     logo_url:       document.getElementById('edLogo').value,
-    hero_image_url: document.getElementById('edHero').value
+    hero_image_url: document.getElementById('edHero').value,
+    button_color:   document.getElementById('edBtnColor').value
   };
   const delay_days = parseInt(document.getElementById('edDelay').value) || 0;
   try {
