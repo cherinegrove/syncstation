@@ -492,7 +492,6 @@ router.post('/email-test', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-module.exports = router;
 
 // POST /admin/api/email-seed — seeds default templates if missing
 router.post('/email-seed', requireAdmin, async (req, res) => {
@@ -636,3 +635,5 @@ async function resolveCampaignRecipients(p, opts) {
   }
   return recipients;
 }
+
+module.exports = router;
