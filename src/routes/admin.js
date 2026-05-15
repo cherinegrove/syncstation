@@ -397,8 +397,12 @@ router.get('/email-templates', requireAdmin, async (req, res) => {
         id SERIAL PRIMARY KEY, journey_key VARCHAR(64) UNIQUE NOT NULL,
         name VARCHAR(128) NOT NULL, subject TEXT NOT NULL, heading TEXT NOT NULL,
         body TEXT NOT NULL, button_text TEXT, button_url TEXT, footer TEXT,
-        is_active BOOLEAN DEFAULT true, updated_at TIMESTAMPTZ DEFAULT NOW(), updated_by TEXT
+        is_active BOOLEAN DEFAULT true, updated_at TIMESTAMPTZ DEFAULT NOW(), updated_by TEXT,
+        logo_url TEXT, hero_image_url TEXT
       )`);
+    // Add new columns if they don't exist (safe migration)
+    await p.query(`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS logo_url TEXT`).catch(()=>{});
+    await p.query(`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS hero_image_url TEXT`).catch(()=>{});
     await p.query(`
       CREATE TABLE IF NOT EXISTS email_journeys (
         id SERIAL PRIMARY KEY, journey_key VARCHAR(64) UNIQUE NOT NULL,
@@ -423,12 +427,12 @@ router.get('/email-templates', requireAdmin, async (req, res) => {
 
 router.put('/email-templates/:key', requireAdmin, async (req, res) => {
   const { key } = req.params;
-  const { subject, heading, body, button_text, button_url, footer, is_active } = req.body;
+  const { subject, heading, body, button_text, button_url, footer, is_active, logo_url, hero_image_url } = req.body;
   try {
     const p = getPool();
     await p.query(
-      `UPDATE email_templates SET subject=$1, heading=$2, body=$3, button_text=$4, button_url=$5, footer=$6, is_active=$7, updated_at=NOW() WHERE journey_key=$8`,
-      [subject, heading, body, button_text, button_url, footer, is_active, key]
+      `UPDATE email_templates SET subject=$1, heading=$2, body=$3, button_text=$4, button_url=$5, footer=$6, is_active=$7, updated_at=NOW(), logo_url=$9, hero_image_url=$10 WHERE journey_key=$8`,
+      [subject, heading, body, button_text, button_url, footer, is_active, key, logo_url||null, hero_image_url||null]
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -471,7 +475,13 @@ router.post('/email-test', requireAdmin, async (req, res) => {
     const btnText  = replace(t.button_text);
     const btnUrl   = replace(t.button_url);
     const btnHtml  = btnText ? `<div style="text-align:center;margin:28px 0"><a href="${btnUrl}" style="background:#FF6B35;color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">${btnText}</a></div>` : '';
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="background:#0f0f11;margin:0;padding:40px 20px;font-family:'Helvetica Neue',Arial,sans-serif"><div style="max-width:580px;margin:0 auto;background:#18181c;border-radius:12px;overflow:hidden;border:1px solid #2e2e38"><div style="background:#0f0f11;padding:28px 32px;border-bottom:1px solid #2e2e38"><span style="font-size:20px;font-weight:700;color:#f0f0f4">🔄 SyncStation</span><span style="float:right;background:#ff6b3520;color:#ff6b35;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid #ff6b3540">TEST EMAIL</span></div><div style="padding:36px 32px"><h1 style="font-size:22px;font-weight:700;color:#f0f0f4;margin:0 0 20px">${replace(t.heading)}</h1>${bodyHtml}${btnHtml}</div><div style="padding:20px 32px;border-top:1px solid #2e2e38;font-size:12px;color:#55556a">${replace(t.footer) || ''}</div></div></body></html>`;
+    const logoHtml = t.logo_url
+      ? `<img src="${t.logo_url}" alt="Logo" style="height:36px;object-fit:contain;vertical-align:middle;margin-right:10px">`
+      : `<span style="font-size:20px">🔄</span> `;
+    const heroHtml = t.hero_image_url
+      ? `<div style="margin:-36px -32px 28px;"><img src="${t.hero_image_url}" alt="" style="width:100%;max-height:200px;object-fit:cover;display:block"></div>`
+      : '';
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="background:#0f0f11;margin:0;padding:40px 20px;font-family:'Helvetica Neue',Arial,sans-serif"><div style="max-width:580px;margin:0 auto;background:#18181c;border-radius:12px;overflow:hidden;border:1px solid #2e2e38"><div style="background:#0f0f11;padding:24px 32px;border-bottom:1px solid #2e2e38;display:flex;align-items:center;justify-content:space-between">${logoHtml}<span style="font-size:18px;font-weight:700;color:#f0f0f4">SyncStation</span><span style="background:#ff6b3520;color:#ff6b35;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid #ff6b3540">TEST</span></div><div style="padding:36px 32px">${heroHtml}<h1 style="font-size:22px;font-weight:700;color:#f0f0f4;margin:0 0 20px">${replace(t.heading)}</h1>${bodyHtml}${btnHtml}</div><div style="padding:20px 32px;border-top:1px solid #2e2e38;font-size:12px;color:#55556a">${replace(t.footer) || ''}</div></div></body></html>`;
     const { sendEmail } = require('../services/emailService');
     const sent = await sendEmail(recipient, subject, html);
     await p.query('INSERT INTO email_log (journey_key, recipient, subject, status) VALUES ($1,$2,$3,$4)', [journey_key, recipient, subject, sent ? 'sent' : 'failed']).catch(() => {});
