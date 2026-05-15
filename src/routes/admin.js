@@ -403,6 +403,7 @@ router.get('/email-templates', requireAdmin, async (req, res) => {
     // Add new columns if they don't exist (safe migration)
     await p.query(`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS logo_url TEXT`).catch(()=>{});
     await p.query(`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS hero_image_url TEXT`).catch(()=>{});
+    await p.query(`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS button_color VARCHAR(16) DEFAULT '#FF6B35'`).catch(()=>{});
     await p.query(`
       CREATE TABLE IF NOT EXISTS email_journeys (
         id SERIAL PRIMARY KEY, journey_key VARCHAR(64) UNIQUE NOT NULL,
@@ -427,12 +428,12 @@ router.get('/email-templates', requireAdmin, async (req, res) => {
 
 router.put('/email-templates/:key', requireAdmin, async (req, res) => {
   const { key } = req.params;
-  const { subject, heading, body, button_text, button_url, footer, is_active, logo_url, hero_image_url } = req.body;
+  const { subject, heading, body, button_text, button_url, footer, is_active, logo_url, hero_image_url, button_color } = req.body;
   try {
     const p = getPool();
     await p.query(
-      `UPDATE email_templates SET subject=$1, heading=$2, body=$3, button_text=$4, button_url=$5, footer=$6, is_active=$7, updated_at=NOW(), logo_url=$9, hero_image_url=$10 WHERE journey_key=$8`,
-      [subject, heading, body, button_text, button_url, footer, is_active, key, logo_url||null, hero_image_url||null]
+      `UPDATE email_templates SET subject=$1, heading=$2, body=$3, button_text=$4, button_url=$5, footer=$6, is_active=$7, updated_at=NOW(), logo_url=$9, hero_image_url=$10, button_color=$11 WHERE journey_key=$8`,
+      [subject, heading, body, button_text, button_url, footer, is_active, key, logo_url||null, hero_image_url||null, button_color||'#FF6B35']
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -474,7 +475,8 @@ router.post('/email-test', requireAdmin, async (req, res) => {
     const bodyHtml = replace(t.body).split('\n').map(l => l.trim() ? `<p style="margin:8px 0;font-size:15px;line-height:1.6;color:#c0c0d0">${l}</p>` : '<br>').join('');
     const btnText  = replace(t.button_text);
     const btnUrl   = replace(t.button_url);
-    const btnHtml  = btnText ? `<div style="text-align:center;margin:28px 0"><a href="${btnUrl}" style="background:#FF6B35;color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">${btnText}</a></div>` : '';
+    const btnColor2 = t.button_color || '#FF6B35';
+    const btnHtml  = btnText ? `<div style="text-align:center;margin:28px 0"><a href="${btnUrl}" style="background:${btnColor2};color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">${btnText}</a></div>` : '';
     const logoHtml = t.logo_url
       ? `<img src="${t.logo_url}" alt="Logo" style="height:36px;object-fit:contain;vertical-align:middle;margin-right:10px">`
       : `<span style="font-size:20px">🔄</span> `;
