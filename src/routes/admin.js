@@ -531,3 +531,108 @@ router.post('/email-seed', requireAdmin, async (req, res) => {
     res.json({ ok: true, inserted, message: `${inserted} template(s) seeded` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// POST /admin/api/email-templates — create new template
+router.post('/email-templates', requireAdmin, async (req, res) => {
+  const { journey_key, name, subject, heading, body, button_text, button_url, footer,
+          is_active, logo_url, hero_image_url, button_color, trigger_event, delay_days } = req.body;
+  if (!journey_key || !subject || !heading || !body) return res.status(400).json({ error: 'journey_key, subject, heading, body required' });
+  try {
+    const p = getPool();
+    await p.query(
+      `INSERT INTO email_templates (journey_key,name,subject,heading,body,button_text,button_url,footer,is_active,logo_url,hero_image_url,button_color,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())`,
+      [journey_key, name||heading, subject, heading, body, button_text||null, button_url||null, footer||null,
+       is_active!==false, logo_url||null, hero_image_url||null, button_color||'#FF6B35']
+    );
+    await p.query(
+      `INSERT INTO email_journeys (journey_key,trigger_event,delay_days,is_active)
+       VALUES ($1,$2,$3,true) ON CONFLICT (journey_key) DO NOTHING`,
+      [journey_key, trigger_event||'manual', delay_days||0]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    const status = err.message.includes('duplicate') || err.message.includes('unique') ? 409 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// POST /admin/api/campaign-preview — return recipients without sending
+router.post('/campaign-preview', requireAdmin, async (req, res) => {
+  try {
+    const p = getPool();
+    const recipients = await resolveCampaignRecipients(p, req.body);
+    res.json({ count: recipients.length, preview: recipients.slice(0, 10).map(r => r.email) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /admin/api/campaign-send — send campaign email to resolved recipients
+router.post('/campaign-send', requireAdmin, async (req, res) => {
+  const { templateKey } = req.body;
+  if (!templateKey) return res.status(400).json({ error: 'templateKey required' });
+  try {
+    const p = getPool();
+    const tmpl = await p.query('SELECT * FROM email_templates WHERE journey_key = $1', [templateKey]);
+    if (!tmpl.rows.length) return res.status(404).json({ error: 'Template not found' });
+    const t = tmpl.rows[0];
+    const appUrl = process.env.APP_URL || 'https://portal.syncstation.app';
+    const recipients = await resolveCampaignRecipients(p, req.body);
+    const { sendEmail } = require('../services/emailService');
+    const btnColor = t.button_color || '#FF6B35';
+    const logoHtml = t.logo_url ? `<img src="${t.logo_url}" alt="Logo" style="height:32px;object-fit:contain;vertical-align:middle;margin-right:8px">` : '<span style="font-size:18px">🔄</span> ';
+    const heroHtml = t.hero_image_url ? `<div style="margin:-28px -32px 28px"><img src="${t.hero_image_url}" alt="" style="width:100%;max-height:200px;object-fit:cover;display:block"></div>` : '';
+    let sent = 0;
+    for (const r of recipients) {
+      const replace = str => (str||'').replace(/\{\{name\}\}/g, r.name||'there').replace(/\{\{portal_id\}\}/g, r.portal_id||'').replace(/\{\{app_url\}\}/g, appUrl).replace(/\{\{token\}\}/g, '').replace(/\{\{invite_url\}\}/g, appUrl).replace(/\{\{inviter\}\}/g, 'Admin').replace(/\{\{days_since\}\}/g, '');
+      const bodyHtml = replace(t.body).split('\n').map(l => l.trim() ? `<p style="margin:8px 0;font-size:15px;line-height:1.6;color:#c0c0d0">${l}</p>` : '<br>').join('');
+      const btnText = replace(t.button_text);
+      const btnUrl  = replace(t.button_url);
+      const btnHtml = btnText ? `<div style="text-align:center;margin:28px 0"><a href="${btnUrl}" style="background:${btnColor};color:white;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">${btnText}</a></div>` : '';
+      const html = `<!DOCTYPE html><html><body style="background:#0f0f11;margin:0;padding:40px 20px;font-family:'Helvetica Neue',Arial,sans-serif"><div style="max-width:580px;margin:0 auto;background:#18181c;border-radius:12px;overflow:hidden;border:1px solid #2e2e38"><div style="background:#0f0f11;padding:24px 32px;border-bottom:1px solid #2e2e38;display:flex;align-items:center">${logoHtml}<span style="font-size:18px;font-weight:700;color:#f0f0f4">SyncStation</span></div><div style="padding:36px 32px">${heroHtml}<h1 style="font-size:22px;font-weight:700;color:#f0f0f4;margin:0 0 20px">${replace(t.heading)}</h1>${bodyHtml}${btnHtml}</div><div style="padding:20px 32px;border-top:1px solid #2e2e38;font-size:12px;color:#55556a">${replace(t.footer)||''}</div></div></body></html>`;
+      const ok = await sendEmail(r.email, replace(t.subject), html).catch(() => false);
+      await p.query('INSERT INTO email_log (journey_key,recipient,portal_id,subject,status) VALUES ($1,$2,$3,$4,$5)', [templateKey, r.email, r.portal_id||null, replace(t.subject), ok?'sent':'failed']).catch(()=>{});
+      if (ok) sent++;
+    }
+    res.json({ ok: true, sent, total: recipients.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+async function resolveCampaignRecipients(p, opts) {
+  const { audience, portalIds, emails, condition } = opts;
+  let recipients = [];
+  if (audience === 'email') {
+    recipients = (emails||'').split(',').map(e => e.trim()).filter(Boolean).map(e => ({ email: e }));
+  } else if (audience === 'specific') {
+    const ids = (portalIds||'').split(',').map(s => s.trim()).filter(Boolean);
+    for (const pid of ids) {
+      const r = await p.query(`SELECT u.email, u.full_name AS name, $1 AS portal_id FROM portal_users pu JOIN users u ON u.id=pu.user_id WHERE pu.portal_id=$1 AND pu.is_active=true`, [pid]);
+      recipients.push(...r.rows);
+    }
+  } else {
+    let tierFilter = '';
+    if (audience === 'tier_free')      tierFilter = `AND pt.tier='free'`;
+    if (audience === 'tier_pro')       tierFilter = `AND pt.tier='pro'`;
+    if (audience === 'tier_suspended') tierFilter = `AND pt.tier='suspended'`;
+    const r = await p.query(`SELECT DISTINCT u.email, u.full_name AS name, pu.portal_id FROM portal_users pu JOIN users u ON u.id=pu.user_id LEFT JOIN portal_tiers pt ON pt.portal_id=pu.portal_id WHERE pu.is_active=true ${tierFilter}`);
+    recipients = r.rows;
+  }
+  // Apply condition filter if set
+  if (condition && condition.field && condition.value) {
+    if (condition.field === 'tier') {
+      const tiers = await p.query('SELECT portal_id, tier FROM portal_tiers').catch(()=>({rows:[]}));
+      const tierMap = {};
+      tiers.rows.forEach(t => { tierMap[t.portal_id] = t.tier; });
+      recipients = recipients.filter(r => {
+        const t = tierMap[r.portal_id] || 'free';
+        return condition.op === 'eq' ? t === condition.value : t !== condition.value;
+      });
+    }
+    if (condition.field === 'has_sync_rules') {
+      const rules = await p.query('SELECT DISTINCT portal_id FROM sync_rules WHERE is_active=true').catch(()=>({rows:[]}));
+      const hasRules = new Set(rules.rows.map(r => r.portal_id));
+      const want = condition.value === 'true' || condition.value === '1';
+      recipients = recipients.filter(r => hasRules.has(r.portal_id) === want);
+    }
+  }
+  return recipients;
+}
