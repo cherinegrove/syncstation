@@ -95,6 +95,21 @@ function getMappedFields(rules) {
   return fields;
 }
 
+// ─── In-memory tier cache — avoids DB hit on every webhook for inactive portals
+const tierCache = new Map(); // portalId -> { tier, cachedAt }
+const TIER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getCachedTier(portalId) {
+  const now = Date.now();
+  const cached = tierCache.get(portalId);
+  if (cached && (now - cached.cachedAt) < TIER_CACHE_TTL) {
+    return cached.tier;
+  }
+  const tierInfo = await getPortalTier(portalId);
+  tierCache.set(portalId, { tier: tierInfo.tier, cachedAt: now });
+  return tierInfo.tier;
+}
+
 // ─── Main webhook receiver ────────────────────────────────────────────────────
 router.post('/receive', async (req, res) => {
   // Acknowledge immediately — HubSpot retries on slow responses
@@ -115,6 +130,16 @@ router.post('/receive', async (req, res) => {
   }
 
   for (const [portalId, portalEvents] of Object.entries(byPortal)) {
+    // Fast tier check with cache — skip inactive portals immediately
+    try {
+      const tier = await getCachedTier(portalId);
+      if (tier === 'cancelled' || tier === 'suspended') {
+        // Drop silently — no logging to avoid log spam
+        continue;
+      }
+    } catch (e) {
+      // If tier check fails, still process (fail open)
+    }
     await processPortalEvents(portalId, portalEvents);
   }
 });
@@ -124,7 +149,7 @@ async function processPortalEvents(portalId, events) {
   let rules, tierInfo, client;
   try {
     rules    = await getSyncRules(portalId);
-    tierInfo = await getPortalTier(portalId);
+    tierInfo = await getPortalTier(portalId); // still needed for isObjectAllowed checks
     client   = await getClient(portalId);
   } catch (e) {
     console.error(`[Webhooks] Setup error for portal ${portalId}:`, e.message);
