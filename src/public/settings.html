@@ -48,27 +48,9 @@
     isolation: isolate;
   }
 
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-family: 'DM Mono', monospace;
-    font-weight: 500;
-    font-size: 18px;
-    letter-spacing: -0.5px;
-    flex: 1;
-  }
-
-  .logo-icon {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-  }
+  .logo { display: flex; align-items: center; flex: 1; }
+  .logo img { width: 170px; height: 48px; border-radius: 8px; overflow: hidden; }
+  .logo-icon img { width: 32px; height: 32px; }
 
   .header-nav {
     display: flex;
@@ -1023,10 +1005,9 @@
 <body>
 
 <div class="header">
-  <div class="logo">
-    <div class="logo-icon"><img src="/images/icon.webp" alt="SS" style="width:32px;height:32px;border-radius:8px;"></div>
-    SyncStation
-  </div>
+    <div class="logo">
+        <img src="/images/SyncStation@2x.webp" alt="SyncStation" >
+    </div>
   <nav class="header-nav">
     <a id="navSettings" href="#" class="active">Sync Rules</a>
     <a id="navAccount" href="#">Account</a>
