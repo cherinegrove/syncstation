@@ -296,8 +296,13 @@ async function pollObjectType(portalId, objectType) {
     const mappedFields = getMappedFieldsForObjectType(rules, objectType);
     console.log(`[Polling] Watching ${mappedFields.length} mapped fields: ${mappedFields.join(', ')}`);
     
-    const lastSync = await getLastSyncTime(portalId, objectType);
-    console.log(`[Polling] Checking ${objectType} modified since ${lastSync}`);
+    const rawLastSync = await getLastSyncTime(portalId, objectType);
+    // Subtract 5 minutes as a safety buffer — ensures no records slip through
+    // gaps between cycles (especially when cycles run long due to large backlogs)
+    const lastSyncDate = new Date(rawLastSync);
+    lastSyncDate.setMinutes(lastSyncDate.getMinutes() - 5);
+    const lastSync = lastSyncDate.toISOString();
+    console.log(`[Polling] Checking ${objectType} modified since ${lastSync} (with 5m buffer)`);
     
     const changedRecords = await getChangedRecords(client, objectType, lastSync, mappedFields);
     
@@ -309,8 +314,8 @@ async function pollObjectType(portalId, objectType) {
     // With multiple rules per contact: 1 contact = ~16 API calls (fetch source + fetch targets + updates)
     // Safe rate: Process 1 record at a time with long delays between rules
     const BATCH_SIZE = 1;  // Process ONE record at a time
-    const DELAY_BETWEEN_SYNCS = 1200;  // 1.2 seconds between each sync rule execution
-    const DELAY_BETWEEN_BATCHES = 8000;  // 8 seconds between batches (records)
+    const DELAY_BETWEEN_SYNCS = 800;   // 0.8 seconds between each sync rule execution
+    const DELAY_BETWEEN_BATCHES = 3000; // 3 seconds between batches (records)
     
     for (let batchStart = 0; batchStart < changedRecords.length; batchStart += BATCH_SIZE) {
       const batch = changedRecords.slice(batchStart, batchStart + BATCH_SIZE);
