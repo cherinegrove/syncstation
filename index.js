@@ -175,7 +175,7 @@ async function startServer() {
                 .then(() => {
                     console.log('[Polling] Service initialised — running every 15 minutes');
                     runPollingCycle();
-                    setInterval(runPollingCycle, 15 * 60 * 1000);
+                    setInterval(runPollingCycle, 5 * 60 * 1000); // 5-minute polling interval
                 })
                 .catch(err => console.error('[Polling] Init error:', err.message));
         } catch (err) {
