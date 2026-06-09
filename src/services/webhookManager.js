@@ -54,6 +54,29 @@ async function createSubscription(objectType, propertyName) {
   }
 }
 
+// Create an associationChange webhook subscription for an object type
+async function createAssociationSubscription(objectType) {
+  const hsObjectType = OBJECT_TYPE_MAP[objectType] || objectType;
+  try {
+    const { data } = await axios.post(
+      `https://api.hubapi.com/webhooks/v3/${APP_ID}/subscriptions?hapikey=${DEV_API_KEY}`,
+      {
+        eventType: `${hsObjectType}.associationChange`,
+        active:    true
+      }
+    );
+    console.log(`[Webhooks] Created associationChange subscription for ${objectType} (ID: ${data.id})`);
+    return data;
+  } catch (err) {
+    if (err.response?.data?.message?.includes('already exists') || err.response?.status === 409) {
+      console.log(`[Webhooks] associationChange subscription already exists for ${objectType}`);
+      return null;
+    }
+    console.error(`[Webhooks] Create associationChange error for ${objectType}:`, err.response?.data || err.message);
+    return null;
+  }
+}
+
 // Delete a webhook subscription by ID
 async function deleteSubscription(subscriptionId) {
   try {
@@ -104,7 +127,7 @@ async function syncSubscriptions(allRules) {
     existing.map(s => `${s.eventType.split('.')[0]}|${s.propertyName}`)
   );
 
-  // Create missing subscriptions
+  // Create missing propertyChange subscriptions
   for (const key of needed) {
     const [objectType, propertyName] = key.split('|');
     const hsType = OBJECT_TYPE_MAP[objectType] || objectType;
@@ -114,7 +137,27 @@ async function syncSubscriptions(allRules) {
     }
   }
 
-  console.log(`[Webhooks] Sync complete. ${needed.size} subscriptions needed, ${existing.length} existing.`);
+  // Create associationChange subscriptions for rules that have syncOnAssociation enabled
+  // Only supported for standard objects (not leads/custom objects)
+  const ASSOCIATION_SUPPORTED = new Set(['contacts', 'companies', 'deals', 'tickets']);
+  const assocObjectsNeeded = new Set();
+  for (const rules of Object.values(allRules)) {
+    for (const rule of rules) {
+      if (!rule.enabled || !rule.syncOnAssociation) continue;
+      if (ASSOCIATION_SUPPORTED.has(rule.sourceObject)) assocObjectsNeeded.add(rule.sourceObject);
+      if (ASSOCIATION_SUPPORTED.has(rule.targetObject)) assocObjectsNeeded.add(rule.targetObject);
+    }
+  }
+
+  for (const objectType of assocObjectsNeeded) {
+    const hsType = OBJECT_TYPE_MAP[objectType] || objectType;
+    const existingKey = `${hsType}|associationChange`;
+    if (!existingSet.has(existingKey)) {
+      await createAssociationSubscription(objectType);
+    }
+  }
+
+  console.log(`[Webhooks] Sync complete. ${needed.size} property subscriptions, ${assocObjectsNeeded.size} association subscriptions.`);
 }
 
-module.exports = { getSubscriptions, createSubscription, deleteSubscription, syncSubscriptions, setWebhookUrl };
+module.exports = { getSubscriptions, createSubscription, createAssociationSubscription, deleteSubscription, syncSubscriptions, setWebhookUrl };
