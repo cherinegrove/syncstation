@@ -328,18 +328,12 @@ router.post('/rules', requirePortalAccess, async (req, res) => {
       console.log(`[Settings] Validation warnings for portal ${portalId}:`, validationWarnings);
     }
     
-    // Safety check: if incoming rules array is significantly smaller than current,
-    // this could be an accidental overwrite from a stale page load.
-    // Block if: incoming is empty AND DB has existing rules.
+    // Safety warning: log if an empty rules array would wipe existing rules
     const incomingCount = (rules || []).length;
     if (incomingCount === 0) {
       const existingCount = await getRuleCount(portalId);
       if (existingCount > 0) {
-        console.warn(`[Settings] ⚠️  Blocked empty rules save for portal ${portalId} - would have deleted ${existingCount} existing rules`);
-        return res.status(400).json({
-          error: 'Safety check failed',
-          message: `This would delete all ${existingCount} existing sync rule(s). If you intentionally want to remove all rules, please delete them one by one from the settings page.`
-        });
+        console.warn(`[Settings] ⚠️  Empty rules save for portal ${portalId} - overwriting ${existingCount} existing rules. Previous rules backed up.`);
       }
     }
 
