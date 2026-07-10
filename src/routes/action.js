@@ -4,6 +4,7 @@ const router        = express.Router();
 const verifyHubSpot = require("../middleware/verifyHubSpot");
 const { getClient } = require("../services/hubspotClient");
 const { sync }      = require("../services/syncService");
+const { getPortalTier, isObjectAllowed } = require("../services/tierService");
 const axios         = require("axios");
 
 // Cache properties for 10 minutes to avoid hammering HubSpot API
@@ -126,6 +127,23 @@ router.post("/execute", verifyHubSpot, async (req, res) => {
       return res.status(400).json({
         outputFields: { sync_status: "error", sync_error: "Missing required fields" }
       });
+    }
+
+    // Tier enforcement — expired trials and disallowed object types cannot sync
+    const tierInfo = await getPortalTier(portalId);
+    if (!tierInfo.canSync) {
+      const reason = tierInfo.isExpired
+        ? "Your SyncStation free trial has ended — upgrade your plan to keep syncing"
+        : `Your ${tierInfo.tier} plan does not allow syncing`;
+      console.log(`[Action] ⛔ Portal ${portalId} blocked - tier: ${tierInfo.tier}, expired: ${tierInfo.isExpired}`);
+      await logWebhookSync(portalId, sourceObjectType, "workflow-action", "blocked", reason, 0, object?.objectId, null);
+      return res.json({ outputFields: { sync_status: "error", sync_error: reason } });
+    }
+    if (!isObjectAllowed(tierInfo.tier, sourceObjectType) || !isObjectAllowed(tierInfo.tier, targetObjectType)) {
+      const reason = `Your ${tierInfo.tier} plan does not include ${sourceObjectType} → ${targetObjectType} syncs`;
+      console.log(`[Action] ⛔ Portal ${portalId} blocked - ${reason}`);
+      await logWebhookSync(portalId, sourceObjectType, "workflow-action", "blocked", reason, 0, object?.objectId, null);
+      return res.json({ outputFields: { sync_status: "error", sync_error: reason } });
     }
 
     // Build property mappings from the 10 pairs

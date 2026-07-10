@@ -199,17 +199,9 @@ router.post('/rules', requirePortalAccess, async (req, res) => {
   try {
     const tierInfo = await getPortalTier(portalId);
     const tier = tierInfo.tier || 'trial';
-    
-    // Define tier limits (must match frontend)
-    const tierLimits = {
-      free: 999999,
-      trial: 30,
-      starter: 10,
-      pro: 30,
-      business: 100
-    };
-    
-    const limit = tierLimits[tier] || 30;
+
+    // Limit comes from the tier config in tierService — single source of truth
+    const limit = tierInfo.maxMappings === Infinity ? 999999 : (tierInfo.maxMappings || 30);
     
     // Count total mappings across ALL rules
     const totalMappings = (rules || []).reduce((sum, rule) => {

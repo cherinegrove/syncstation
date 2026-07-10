@@ -1059,6 +1059,13 @@
     </div>
   </div>
 
+  <!-- Trial countdown banner — shown while a trial is active -->
+  <div id="trialBanner" style="display: none; margin-bottom: 20px; padding: 14px 20px; background: linear-gradient(90deg, rgba(255,107,53,0.12), rgba(255,179,71,0.06)); border: 1px solid rgba(255,107,53,0.35); border-radius: 10px;">
+    <span style="font-size: 15px;">⏳ <strong>Free trial — <span id="trialDaysLeft">7 days</span> left.</strong>
+    <span style="color: var(--muted);">Enjoy full access with up to 30 property mappings. Syncing stops when your trial ends.</span></span>
+    <a href="/account" style="margin-left: 12px; color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap;">Choose a plan →</a>
+  </div>
+
   <!-- PayStack Upgrade Section -->
   <div id="upgradeSection" style="display: none;">
     <div class="upgrade-container">
@@ -2167,6 +2174,21 @@
         document.getElementById('upgradeSection').style.display = 'block';
       } else {
         document.getElementById('upgradeSection').style.display = 'none';
+      }
+
+      // Trial countdown banner — visible for the whole trial so the end date is never a surprise
+      const trialBanner = document.getElementById('trialBanner');
+      if (trialBanner) {
+        if (tier === 'trial' && !data.isExpired && data.trial_started_at) {
+          const trialDays = data.trialDays || 7;
+          const msLeft    = new Date(data.trial_started_at).getTime() + trialDays * 86400000 - Date.now();
+          const daysLeft  = Math.max(0, Math.ceil(msLeft / 86400000));
+          document.getElementById('trialDaysLeft').textContent =
+            daysLeft === 1 ? '1 day' : daysLeft + ' days';
+          trialBanner.style.display = 'block';
+        } else {
+          trialBanner.style.display = 'none';
+        }
       }
 
     } catch (err) {

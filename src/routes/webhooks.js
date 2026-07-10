@@ -212,7 +212,7 @@ async function processPortalEvents(portalId, events) {
     console.log(`[Webhooks] ${objectType} ${objectId} - ${propertyName} changed to "${propertyValue}"`);
 
     // Tier check
-    if (tierInfo.isExpired || !isObjectAllowed(objectType, tierInfo.tier)) {
+    if (tierInfo.isExpired || !isObjectAllowed(tierInfo.tier, objectType)) {
       console.log(`[Webhooks] ⛔ Portal ${portalId} tier ${tierInfo.tier} - skipping ${objectType} sync`);
       await logWebhookSync(portalId, objectType, 'ALL_RULES', 'blocked',
         `Tier ${tierInfo.tier} - cannot sync`, 0, objectId, null);
