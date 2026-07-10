@@ -6,6 +6,12 @@ const { Pool } = require('pg');
 
 let pool = null;
 let isPolling = false;  // 🔥 CRITICAL: Mutex to prevent overlapping polling cycles
+let pollingStartedAt = 0;
+// Watchdog: if a cycle runs longer than this, assume it hung (e.g. an API call
+// that never resolved) and let the next cycle take over instead of skipping forever
+const MAX_CYCLE_MS = 30 * 60 * 1000;
+// Hard cap per portal within a cycle — one stuck portal must not wedge the rest
+const PORTAL_TIMEOUT_MS = 25 * 60 * 1000;
 
 function getPool() {
   if (!pool && process.env.DATABASE_URL) {
@@ -422,11 +428,15 @@ async function pollObjectType(portalId, objectType) {
 async function runPollingCycle() {
   // 🔥 CRITICAL: Prevent overlapping polling cycles
   if (isPolling) {
-    console.log('[Polling] ⏭️ Skipping cycle - previous cycle still running');
-    return;
+    if (Date.now() - pollingStartedAt < MAX_CYCLE_MS) {
+      console.log('[Polling] ⏭️ Skipping cycle - previous cycle still running');
+      return;
+    }
+    console.warn(`[Polling] ⚠️ Watchdog: previous cycle exceeded ${MAX_CYCLE_MS / 60000} minutes — assuming it hung, starting fresh`);
   }
-  
+
   isPolling = true;
+  pollingStartedAt = Date.now();
   console.log('[Polling] ========== Starting polling cycle ==========');
   const startTime = Date.now();
   
@@ -441,17 +451,35 @@ async function runPollingCycle() {
     // Each portal still processes its own object types sequentially internally
     // (to respect HubSpot rate limits per portal token).
     const portalResults = await Promise.all(portals.map(async (portalId) => {
-      let synced = 0;
-      let errors = 0;
+      const pollPortal = async () => {
+        let synced = 0;
+        let errors = 0;
 
-      const objectTypes = ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'];
-      for (const objectType of objectTypes) {
-        const result = await pollObjectType(portalId, objectType);
-        synced += result.synced;
-        errors += result.errors;
+        const objectTypes = ['contacts', 'companies', 'deals', 'tickets', 'leads', 'projects'];
+        for (const objectType of objectTypes) {
+          const result = await pollObjectType(portalId, objectType);
+          synced += result.synced;
+          errors += result.errors;
+        }
+
+        return { portalId, synced, errors };
+      };
+
+      // Time-box each portal so a hung API call can't wedge the whole cycle
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`portal ${portalId} timed out after ${PORTAL_TIMEOUT_MS / 60000} minutes`)), PORTAL_TIMEOUT_MS);
+        if (timer.unref) timer.unref();
+      });
+
+      try {
+        return await Promise.race([pollPortal(), timeout]);
+      } catch (err) {
+        console.error('[Polling] ⚠️', err.message);
+        return { portalId, synced: 0, errors: 1 };
+      } finally {
+        clearTimeout(timer);
       }
-
-      return { portalId, synced, errors };
     }));
 
     for (const { synced, errors } of portalResults) {

@@ -20,8 +20,11 @@ function getPool() {
       CREATE TABLE IF NOT EXISTS sync_rules (
         portal_id TEXT PRIMARY KEY,
         rules JSONB NOT NULL,
+        rules_backup JSONB,
         updated_at TIMESTAMP DEFAULT NOW()
       );
+      -- Add backup column if upgrading existing table
+      ALTER TABLE sync_rules ADD COLUMN IF NOT EXISTS rules_backup JSONB;
     `).catch(err => console.error('[DB] sync_rules table error:', err.message));
   }
   return pool;
@@ -46,10 +49,14 @@ async function saveRules(portalId, rules) {
   const p = getPool();
   if (p) {
     try {
+      // Back up the previous rules before overwriting
       await p.query(`
-        INSERT INTO sync_rules (portal_id, rules, updated_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (portal_id) DO UPDATE SET rules = $2, updated_at = NOW()
+        INSERT INTO sync_rules (portal_id, rules, rules_backup, updated_at)
+        VALUES ($1, $2, NULL, NOW())
+        ON CONFLICT (portal_id) DO UPDATE 
+          SET rules_backup = sync_rules.rules,
+              rules = $2,
+              updated_at = NOW()
       `, [String(portalId), JSON.stringify(rules)]);
       return;
     } catch (err) {
@@ -57,6 +64,21 @@ async function saveRules(portalId, rules) {
     }
   }
   memRulesStore[portalId] = rules;
+}
+
+// Get current rule count from DB (used for safety check before overwrite)
+async function getRuleCount(portalId) {
+  const p = getPool();
+  if (!p) return 0;
+  try {
+    const result = await p.query(
+      'SELECT jsonb_array_length(rules) as count FROM sync_rules WHERE portal_id = $1',
+      [String(portalId)]
+    );
+    return result.rows[0]?.count || 0;
+  } catch (err) {
+    return 0;
+  }
 }
 
 // All known object types to test
@@ -306,6 +328,15 @@ router.post('/rules', requirePortalAccess, async (req, res) => {
       console.log(`[Settings] Validation warnings for portal ${portalId}:`, validationWarnings);
     }
     
+    // Safety warning: log if an empty rules array would wipe existing rules
+    const incomingCount = (rules || []).length;
+    if (incomingCount === 0) {
+      const existingCount = await getRuleCount(portalId);
+      if (existingCount > 0) {
+        console.warn(`[Settings] ⚠️  Empty rules save for portal ${portalId} - overwriting ${existingCount} existing rules. Previous rules backed up.`);
+      }
+    }
+
     await saveRules(portalId, rules || []);
     console.log(`[Settings] Saved ${rules?.length || 0} rules for portal ${portalId}`);
 
@@ -701,6 +732,36 @@ router.get('/test-object-access', requirePortalAccess, async (req, res) => {
       canRead: false,
       canWrite: false
     });
+  }
+});
+
+// POST /settings/rules/restore-backup — restore previous rules from backup
+router.post('/rules/restore-backup', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const p = getPool();
+  if (!p) return res.status(500).json({ error: 'No database connection' });
+
+  try {
+    const result = await p.query(
+      'SELECT rules_backup FROM sync_rules WHERE portal_id = $1',
+      [String(portalId)]
+    );
+    const backup = result.rows[0]?.rules_backup;
+    if (!backup || !backup.length) {
+      return res.status(404).json({ error: 'No backup available for this portal' });
+    }
+
+    // Restore backup as current rules (and clear backup)
+    await p.query(
+      'UPDATE sync_rules SET rules = rules_backup, rules_backup = rules, updated_at = NOW() WHERE portal_id = $1',
+      [String(portalId)]
+    );
+
+    console.log(`[Settings] Restored ${backup.length} rules from backup for portal ${portalId}`);
+    res.json({ ok: true, restored: backup.length, rules: backup });
+  } catch (err) {
+    console.error('[Settings] Restore backup error:', err.message);
+    res.status(500).json({ error: 'Failed to restore backup' });
   }
 });
 
