@@ -43,6 +43,11 @@ router.post('/register', async (req, res) => {
         // TODO: send verification email with verificationToken
         console.log(`[Auth] New user registered: ${email} (verification: ${verificationToken})`);
 
+        // Push the signup into our HubSpot CRM for tracking/marketing.
+        // Fire-and-forget: a CRM failure must never block registration.
+        const { syncSignupToCrm } = require('../services/crmSync');
+        syncSignupToCrm({ email, fullName }).catch(() => {});
+
         res.status(201).json({
             success: true,
             message: 'Account created. Please check your email to verify your account, then sign in.',
