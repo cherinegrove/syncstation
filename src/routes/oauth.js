@@ -167,6 +167,11 @@ router.get('/callback', async (req, res) => {
                 const userSession = await authService.verifySession(sessionToken);
                 await authService.linkUserToPortal(userSession.userId, portalId, 'owner');
                 console.log(`[OAuth] Linked user ${userSession.userId} → portal ${portalId}`);
+
+                // Record the connected portal on their contact in our marketing CRM.
+                // Fire-and-forget: CRM failures must never break the OAuth flow.
+                const { updateCrmOnPortalConnect } = require('../services/crmSync');
+                updateCrmOnPortalConnect(userSession.email, portalId, hubDomain).catch(() => {});
             } catch (linkErr) {
                 console.log('[OAuth] Could not link user to portal:', linkErr.message);
             }

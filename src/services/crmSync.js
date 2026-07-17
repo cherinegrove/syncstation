@@ -49,21 +49,42 @@ async function syncSignupToCrm({ email, fullName, signupDate }) {
   }
 }
 
-// Update the status property on an existing contact (e.g. 'connected_portal',
-// 'trial_expired', 'paid'). Fire-and-forget like syncSignupToCrm.
-async function updateCrmStatus(email, status) {
+// Update properties on an existing contact by email; creates the contact if
+// it doesn't exist yet. Never throws — failures are logged for follow-up.
+async function updateCrmContact(email, properties) {
   try {
     const client = await getClient(MARKETING_PORTAL_ID);
-    await client.crm.contacts.basicApi.update(email, {
-      properties: { syncstation_status: status }
-    }, 'email');
-    console.log(`[CRM Sync] ✅ Status '${status}' set for ${email}`);
+    try {
+      await client.crm.contacts.basicApi.update(email, { properties }, 'email');
+    } catch (err) {
+      if (err.code === 404) {
+        await client.crm.contacts.basicApi.create({ properties: { email, ...properties } });
+      } else {
+        throw err;
+      }
+    }
+    console.log(`[CRM Sync] ✅ Updated ${email}:`, Object.keys(properties).join(', '));
     return { ok: true };
   } catch (err) {
     const detail = err.body?.message || err.message;
-    console.error(`[CRM Sync] ❌ Failed status update for ${email}:`, detail);
+    console.error(`[CRM Sync] ❌ Failed contact update for ${email}:`, detail);
     return { ok: false, error: detail };
   }
 }
 
-module.exports = { syncSignupToCrm, updateCrmStatus, MARKETING_PORTAL_ID };
+// Status-only convenience (e.g. 'trial_expired', 'customer')
+async function updateCrmStatus(email, status) {
+  return updateCrmContact(email, { syncstation_status: status });
+}
+
+// Called when a user connects their HubSpot portal via OAuth — records which
+// portal they linked so marketing can see who's activated and from where.
+async function updateCrmOnPortalConnect(email, portalId, hubDomain) {
+  return updateCrmContact(email, {
+    syncstation_status: 'connected_portal',
+    syncstation_portal_id: String(portalId),
+    syncstation_hub_domain: hubDomain || ''
+  });
+}
+
+module.exports = { syncSignupToCrm, updateCrmContact, updateCrmStatus, updateCrmOnPortalConnect, MARKETING_PORTAL_ID };
