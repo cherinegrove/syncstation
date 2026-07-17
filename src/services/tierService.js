@@ -20,7 +20,8 @@ function getPool() {
         paddle_subscription_id     TEXT,
         paddle_subscription_status TEXT,
         updated_at                 TIMESTAMP DEFAULT NOW()
-      )
+      );
+      ALTER TABLE portal_tiers ADD COLUMN IF NOT EXISTS trial_expired_synced BOOLEAN DEFAULT FALSE;
     `).then(() => console.log('[Tiers] Table ready'))
       .catch(err => console.error('[Tiers] Table error:', err.message));
   }
@@ -93,6 +94,50 @@ const TIERS = {
   }
 };
 
+// ── Marketing CRM funnel updates ──────────────────────────────────────────────
+
+// Push CRM properties to every (real) user of a portal. Fire-and-forget.
+async function pushStatusToCrm(portalId, properties) {
+  try {
+    const { updateCrmContact } = require('./crmSync');
+    const p = getPool();
+    const r = await p.query(
+      `SELECT u.email FROM portal_users pu
+       JOIN users u ON u.id = pu.user_id
+       WHERE pu.portal_id = $1 AND pu.is_active`,
+      [String(portalId)]
+    );
+    const emails = r.rows.map(x => x.email).filter(e => !e.includes('+ssdemo'));
+    for (const email of emails) {
+      await updateCrmContact(email, properties);
+    }
+  } catch (err) {
+    console.error(`[Tiers] CRM push failed for portal ${portalId}:`, err.message);
+  }
+}
+
+// Mark trial expiry in the CRM exactly once per portal (DB flag + memory guard)
+const trialExpiredSyncedCache = new Set();
+async function markTrialExpiredOnce(portalId) {
+  if (trialExpiredSyncedCache.has(portalId)) return;
+  trialExpiredSyncedCache.add(portalId);
+  try {
+    const p = getPool();
+    const r = await p.query(
+      `UPDATE portal_tiers SET trial_expired_synced = TRUE
+       WHERE portal_id = $1 AND trial_expired_synced IS NOT TRUE
+       RETURNING portal_id`,
+      [String(portalId)]
+    );
+    if (r.rows.length > 0) {
+      console.log(`[Tiers] Trial expired for portal ${portalId} — updating CRM`);
+      await pushStatusToCrm(portalId, { syncstation_status: 'trial_expired' });
+    }
+  } catch (err) {
+    console.error(`[Tiers] Trial-expired CRM sync failed for ${portalId}:`, err.message);
+  }
+}
+
 async function getPortalTier(portalId) {
   const p = getPool();
   try {
@@ -129,6 +174,11 @@ async function getPortalTier(portalId) {
 
     let canSync = tierConfig.canSync;
     if (isExpired) canSync = false;
+
+    // First time we see this trial as expired → funnel update in the CRM
+    if (isExpired && tierUpper === 'TRIAL') {
+      markTrialExpiredOnce(portalId); // deliberately not awaited
+    }
 
     const returnValue = {
       tier:                       row.tier.toLowerCase(),
@@ -167,8 +217,18 @@ async function setPortalTier(portalId, tier, paddleData = {}) {
       paddle_customer_id         = COALESCE($3, portal_tiers.paddle_customer_id),
       paddle_subscription_id     = COALESCE($4, portal_tiers.paddle_subscription_id),
       paddle_subscription_status = COALESCE($5, portal_tiers.paddle_subscription_status),
+      trial_expired_synced       = FALSE,
       updated_at                 = NOW()
   `, [portalId, validTier, customer_id, subscription_id, subscription_status]);
+  trialExpiredSyncedCache.delete(String(portalId));
+
+  // Funnel update in the marketing CRM (fire-and-forget)
+  const paidTiers = ['starter', 'pro', 'business'];
+  const statusMap = { cancelled: 'cancelled', suspended: 'suspended', trial: 'trial', free: 'free' };
+  const crmProps = paidTiers.includes(validTier)
+    ? { syncstation_status: 'customer', syncstation_plan: validTier }
+    : { syncstation_status: statusMap[validTier] || validTier };
+  pushStatusToCrm(portalId, crmProps); // deliberately not awaited
 
   return { tier: validTier };
 }
