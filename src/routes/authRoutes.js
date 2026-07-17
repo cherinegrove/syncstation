@@ -72,6 +72,10 @@ router.post('/login', async (req, res) => {
 
         const result = await authService.login(email, password, portalId || null);
 
+        // Stamp last sign-in on their marketing CRM contact (fire-and-forget)
+        const { recordLogin } = require('../services/crmEngagement');
+        recordLogin(email).catch(() => {});
+
         res.cookie('sessionToken', result.sessionToken, {
             httpOnly: true,
             secure:   process.env.NODE_ENV === 'production',

@@ -12,9 +12,15 @@ function splitName(fullName) {
   return { firstname: parts[0] || '', lastname: parts.slice(1).join(' ') };
 }
 
+// Internal test accounts never belong in the marketing CRM
+function isInternalTestEmail(email) {
+  return !email || email.includes('+ssdemo');
+}
+
 // Upsert a contact for a new SyncStation signup. Never throws — signup must
 // succeed even if the CRM push fails; failures are logged for follow-up.
 async function syncSignupToCrm({ email, fullName, signupDate }) {
+  if (isInternalTestEmail(email)) return { ok: true, skipped: true };
   try {
     const client = await getClient(MARKETING_PORTAL_ID);
     const { firstname, lastname } = splitName(fullName);
@@ -52,6 +58,7 @@ async function syncSignupToCrm({ email, fullName, signupDate }) {
 // Update properties on an existing contact by email; creates the contact if
 // it doesn't exist yet. Never throws — failures are logged for follow-up.
 async function updateCrmContact(email, properties) {
+  if (isInternalTestEmail(email)) return { ok: true, skipped: true };
   try {
     const client = await getClient(MARKETING_PORTAL_ID);
     try {

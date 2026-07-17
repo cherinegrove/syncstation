@@ -168,6 +168,15 @@ async function startServer() {
             console.error('[DailyReport] Failed to schedule:', err.message);
         }
 
+        // ── CRM ENGAGEMENT SWEEP ──────────────────────────────────────────────
+        try {
+            const { scheduleEngagementSweep } = require('./src/services/crmEngagement');
+            scheduleEngagementSweep();
+            console.log('[CRM Engagement] Daily sweep scheduled');
+        } catch (err) {
+            console.error('[CRM Engagement] Failed to schedule:', err.message);
+        }
+
         // ── POLLING SERVICE ───────────────────────────────────────────────────
         try {
             const { runPollingCycle, initPollingTable } = require('./src/services/pollingService');

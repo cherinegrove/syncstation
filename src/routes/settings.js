@@ -330,6 +330,9 @@ router.post('/rules', requirePortalAccess, async (req, res) => {
     }
 
     await saveRules(portalId, rules || []);
+
+    // Refresh rule-count engagement fields in the marketing CRM (fire-and-forget)
+    require('../services/crmEngagement').syncPortalEngagement(portalId).catch(() => {});
     console.log(`[Settings] Saved ${rules?.length || 0} rules for portal ${portalId}`);
 
     // Auto-sync webhooks after saving rules
@@ -356,6 +359,9 @@ router.post('/rules', requirePortalAccess, async (req, res) => {
     console.error('[Settings] Error saving rules:', err.message);
     // Fall back to saving without validation if validation fails
     await saveRules(portalId, rules || []);
+
+    // Refresh rule-count engagement fields in the marketing CRM (fire-and-forget)
+    require('../services/crmEngagement').syncPortalEngagement(portalId).catch(() => {});
 
     // Auto-sync webhooks after saving rules
     try {
