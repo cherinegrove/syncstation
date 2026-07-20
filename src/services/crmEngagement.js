@@ -47,6 +47,36 @@ async function getEngagementRows(where, params) {
   return r.rows;
 }
 
+// Current package, monthly cost, and standing for a user — based on their
+// most recently updated portal (mirrors the CRM's last-write-wins semantics)
+async function getUserPackage(userId) {
+  const p = getPool();
+  const r = await p.query(`
+    SELECT pu.portal_id, pt.paddle_subscription_status
+    FROM portal_users pu
+    JOIN portal_tiers pt ON pt.portal_id = pu.portal_id
+    WHERE pu.user_id = $1 AND pu.is_active
+    ORDER BY pt.updated_at DESC
+    LIMIT 1
+  `, [userId]);
+  if (!r.rows.length) return null;
+
+  const { getPortalTier } = require('./tierService');
+  const tierInfo = await getPortalTier(r.rows[0].portal_id);
+  const subStatus = r.rows[0].paddle_subscription_status;
+
+  const goodStanding =
+    tierInfo.canSync &&
+    !tierInfo.isExpired &&
+    !['past_due', 'paused', 'canceled'].includes(subStatus || '');
+
+  return {
+    syncstation_package:       tierInfo.tier,
+    syncstation_package_cost:  String(tierInfo.price ?? 0),
+    syncstation_good_standing: goodStanding ? 'true' : 'false'
+  };
+}
+
 async function pushEngagementRow(row) {
   const props = {
     syncstation_rule_count:   String(row.rule_count),
@@ -54,6 +84,12 @@ async function pushEngagementRow(row) {
   };
   if (row.last_login) props.syncstation_last_login = toDay(row.last_login);
   if (row.last_sync)  props.syncstation_last_sync  = toDay(row.last_sync);
+  try {
+    const pkg = await getUserPackage(row.id);
+    if (pkg) Object.assign(props, pkg);
+  } catch (err) {
+    console.error(`[CRM Engagement] Package lookup failed for ${row.email}:`, err.message);
+  }
   return updateCrmContact(row.email, props);
 }
 
