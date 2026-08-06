@@ -122,20 +122,17 @@ function validateMapping(sourceProperty, targetProperty) {
     };
   }
   
-  // Check dropdown options if both are dropdowns
+  // Check dropdown options if both are dropdowns. A mismatch here means some
+  // values may not carry over cleanly — worth flagging, but the mapping itself
+  // is valid (the types are compatible and most values will sync fine), so
+  // this is always a warning, never a save-blocking error.
   if (sourceProperty.type === 'enumeration' && targetProperty.type === 'enumeration') {
     const dropdownValidation = validateDropdownOptions(sourceProperty, targetProperty);
-    if (!dropdownValidation.valid) {
-      return {
-        valid: false,
-        warning: dropdownValidation.warning,
-        missingOptions: dropdownValidation.missingOptions
-      };
-    }
     if (dropdownValidation.warning) {
       return {
         valid: true,
-        warning: dropdownValidation.warning
+        warning: dropdownValidation.warning,
+        missingOptions: dropdownValidation.missingOptions
       };
     }
   }
