@@ -47,12 +47,13 @@ async function getEngagementRows(where, params) {
   return r.rows;
 }
 
-// Current package, monthly cost, and standing for a user — based on their
-// most recently updated portal (mirrors the CRM's last-write-wins semantics)
-async function getUserPackage(userId) {
+// Package, cost, standing, portal ID, and role for a user — all based on
+// their most recently updated portal (mirrors the CRM's last-write-wins
+// semantics already accepted for multi-portal users)
+async function getCurrentPortalInfo(userId) {
   const p = getPool();
   const r = await p.query(`
-    SELECT pu.portal_id, pt.paddle_subscription_status
+    SELECT pu.portal_id, pu.role, pt.paddle_subscription_status
     FROM portal_users pu
     JOIN portal_tiers pt ON pt.portal_id = pu.portal_id
     WHERE pu.user_id = $1 AND pu.is_active
@@ -71,6 +72,8 @@ async function getUserPackage(userId) {
     !['past_due', 'paused', 'canceled'].includes(subStatus || '');
 
   return {
+    syncstation_portal_id:     String(r.rows[0].portal_id),
+    syncstation_user_role:     r.rows[0].role || '',
     syncstation_package:       tierInfo.tier,
     syncstation_package_cost:  String(tierInfo.price ?? 0),
     syncstation_good_standing: goodStanding ? 'true' : 'false'
@@ -85,10 +88,10 @@ async function pushEngagementRow(row) {
   if (row.last_login) props.syncstation_last_login = toDay(row.last_login);
   if (row.last_sync)  props.syncstation_last_sync  = toDay(row.last_sync);
   try {
-    const pkg = await getUserPackage(row.id);
-    if (pkg) Object.assign(props, pkg);
+    const portalInfo = await getCurrentPortalInfo(row.id);
+    if (portalInfo) Object.assign(props, portalInfo);
   } catch (err) {
-    console.error(`[CRM Engagement] Package lookup failed for ${row.email}:`, err.message);
+    console.error(`[CRM Engagement] Portal info lookup failed for ${row.email}:`, err.message);
   }
   return updateCrmContact(row.email, props);
 }
