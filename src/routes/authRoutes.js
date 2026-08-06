@@ -8,6 +8,23 @@ const authService = require('../services/authService');
 const pool        = require('../services/database');
 const crypto      = require('crypto');
 
+// Table was referenced by /invite, /team, and accept-invite but never created
+// anywhere — self-heal it here, matching the pattern other services use.
+pool.query(`
+    CREATE TABLE IF NOT EXISTS portal_invites (
+        id           SERIAL PRIMARY KEY,
+        email        TEXT NOT NULL,
+        portal_id    TEXT NOT NULL,
+        role         TEXT NOT NULL DEFAULT 'user',
+        invite_token TEXT NOT NULL UNIQUE,
+        invited_by   INTEGER REFERENCES users(id),
+        expires_at   TIMESTAMP NOT NULL,
+        created_at   TIMESTAMP DEFAULT NOW(),
+        UNIQUE (email, portal_id)
+    )
+`).then(() => console.log('[Auth] portal_invites table ready'))
+  .catch(err => console.error('[Auth] portal_invites table error:', err.message));
+
 // ── Middleware: require auth token ────────────────────────────────────────────
 async function requireAuth(req, res, next) {
     const token = req.cookies?.sessionToken || req.headers?.authorization?.replace('Bearer ', '');
@@ -251,6 +268,88 @@ router.post('/invite', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('[Auth] Invite error:', err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ── INVITE INFO (for the register page to prefill/validate) ──────────────────
+
+router.get('/invite-info', async (req, res) => {
+    try {
+        const { token } = req.query;
+        if (!token) return res.status(400).json({ error: 'Invite token required' });
+
+        const result = await pool.query(
+            `SELECT email, portal_id, role, expires_at FROM portal_invites
+             WHERE invite_token = $1`,
+            [token]
+        );
+
+        if (!result.rows.length) return res.status(404).json({ error: 'Invite not found' });
+        const invite = result.rows[0];
+
+        if (new Date(invite.expires_at) < new Date()) {
+            return res.status(410).json({ error: 'This invite has expired' });
+        }
+
+        res.json({ email: invite.email, role: invite.role });
+
+    } catch (err) {
+        console.error('[Auth] Invite-info error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── ACCEPT INVITE ──────────────────────────────────────────────────────────────
+
+router.post('/accept-invite', async (req, res) => {
+    try {
+        const { token, password, fullName } = req.body;
+        if (!token || !password || !fullName) {
+            return res.status(400).json({ error: 'Token, password, and name are required' });
+        }
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters' });
+        }
+
+        const result = await pool.query(
+            `SELECT email, portal_id, role, invited_by, expires_at FROM portal_invites
+             WHERE invite_token = $1`,
+            [token]
+        );
+        if (!result.rows.length) return res.status(404).json({ error: 'Invite not found' });
+        const invite = result.rows[0];
+
+        if (new Date(invite.expires_at) < new Date()) {
+            return res.status(410).json({ error: 'This invite has expired' });
+        }
+
+        const { user } = await authService.registerUser(
+            invite.email, password, fullName, invite.portal_id, invite.role, invite.invited_by
+        );
+
+        // Invited users have proven their email by using the invite link — verify immediately
+        await pool.query(
+            'UPDATE users SET email_verified = true, verification_token = NULL, verification_token_expires = NULL WHERE id = $1',
+            [user.id]
+        );
+
+        await pool.query('DELETE FROM portal_invites WHERE invite_token = $1', [token]);
+
+        console.log(`[Auth] Invite accepted: ${invite.email} joined portal ${invite.portal_id}`);
+
+        // New teammate joining a portal is worth tracking in the marketing CRM too
+        require('../services/crmSync').syncSignupToCrm({ email: invite.email, fullName }).catch(() => {});
+
+        res.status(201).json({
+            success: true,
+            message: 'Account created. You can now sign in.',
+            user: { id: user.id, email: user.email, fullName: user.full_name }
+        });
+
+    } catch (err) {
+        console.error('[Auth] Accept-invite error:', err.message);
+        const status = err.message.includes('already exists') ? 409 : 500;
+        res.status(status).json({ error: err.message });
     }
 });
 
