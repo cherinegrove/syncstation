@@ -8,6 +8,22 @@ const pool   = require('./database');
 
 const SALT_ROUNDS = 10;
 
+// portal_users predates the app's self-healing-table pattern and was created
+// without a uniqueness guarantee on (user_id, portal_id), even though invite
+// acceptance and OAuth linking both use ON CONFLICT (user_id, portal_id) —
+// which throws a real Postgres error the moment it ever hits an existing row
+// (e.g. re-inviting or reconnecting someone already linked to that portal).
+// Self-heals it here, matching the pattern other services use for their tables.
+pool.query(`
+    DO $$
+    BEGIN
+        ALTER TABLE portal_users ADD CONSTRAINT portal_users_user_portal_unique UNIQUE (user_id, portal_id);
+    EXCEPTION WHEN duplicate_object THEN
+        NULL;
+    END $$;
+`).then(() => console.log('[Auth] portal_users unique constraint ready'))
+  .catch(err => console.error('[Auth] portal_users constraint error:', err.message));
+
 class AuthService {
 
     // ── REGISTER ──────────────────────────────────────────────────────────────
