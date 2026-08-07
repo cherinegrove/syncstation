@@ -679,6 +679,39 @@ router.post('/rules/sync-webhooks', requirePortalAccess, async (req, res) => {
   }
 });
 
+// POST /settings/rules/:ruleId/sync-now — one-off manual backfill of a single rule
+router.post('/rules/:ruleId/sync-now', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const { ruleId } = req.params;
+
+  try {
+    const rules = await getRules(portalId);
+    const rule  = rules.find(r => String(r.id) === String(ruleId));
+    if (!rule) return res.status(404).json({ error: 'Rule not found' });
+    if (!rule.mappings?.length) return res.status(400).json({ error: 'This rule has no property mappings to sync' });
+
+    const syncNowService = require('../services/syncNowService');
+    const result = syncNowService.startSyncNow(portalId, rule);
+    res.json(result);
+  } catch (err) {
+    console.error('[Settings] Sync-now start error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /settings/rules/:ruleId/sync-now/status — poll progress of a running/finished backfill
+router.get('/rules/:ruleId/sync-now/status', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const { ruleId } = req.params;
+
+  try {
+    const syncNowService = require('../services/syncNowService');
+    res.json(syncNowService.getStatus(portalId, ruleId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /settings/test-object-access - Test if we can write to a specific object
 router.get('/test-object-access', requirePortalAccess, async (req, res) => {
   const { portalId, objectType } = req.query;

@@ -24,15 +24,15 @@ function getPool() {
 }
 
 // ✅ Log sync results to database
-async function logSyncResult(portalId, objectType, ruleName, status, errorMessage = null, recordsSynced = 0, sourceRecordId = null, targetRecordId = null) {
+async function logSyncResult(portalId, objectType, ruleName, status, errorMessage = null, recordsSynced = 0, sourceRecordId = null, targetRecordId = null, triggerType = 'polling') {
   const p = getPool();
   if (!p) return;
-  
+
   try {
     await p.query(`
       INSERT INTO sync_logs (portal_id, sync_time, status, error_message, records_synced, object_type, rule_name, trigger_type, source_record_id, target_record_id)
-      VALUES ($1, NOW(), $2, $3, $4, $5, $6, 'polling', $7, $8)
-    `, [portalId, status, errorMessage, recordsSynced, objectType, ruleName, sourceRecordId ? String(sourceRecordId) : null, targetRecordId ? String(targetRecordId) : null]);
+      VALUES ($1, NOW(), $2, $3, $4, $5, $6, $9, $7, $8)
+    `, [portalId, status, errorMessage, recordsSynced, objectType, ruleName, sourceRecordId ? String(sourceRecordId) : null, targetRecordId ? String(targetRecordId) : null, triggerType]);
   } catch (err) {
     console.error('[Polling] Error logging sync result:', err.message);
   }
@@ -532,5 +532,11 @@ async function initPollingTable() {
 module.exports = {
   runPollingCycle,
   initPollingTable,
-  wasWrittenByPolling  // 🔥 Export so webhooks can check for polling writes
+  wasWrittenByPolling,  // 🔥 Export so webhooks can check for polling writes
+  // Exported so syncNowService.js can reuse the exact same fetch/pacing/logging
+  // logic for on-demand backfills instead of duplicating it
+  getChangedRecords,
+  getMappedFieldsForObjectType,
+  logSyncResult,
+  markPollingWrite
 };

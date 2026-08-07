@@ -239,6 +239,21 @@
 
   .mapping-pill .arrow { color: var(--accent); }
 
+  .rule-syncnow {
+    margin: 0 20px 16px 74px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .rule-syncnow.running { color: var(--accent2); border-color: rgba(255,179,71,0.35); }
+  .rule-syncnow.success { color: var(--success); border-color: rgba(74,222,128,0.3); }
+  .rule-syncnow.warn    { color: var(--accent2); border-color: rgba(255,179,71,0.35); }
+  .rule-syncnow.error   { color: var(--error); border-color: rgba(248,113,113,0.3); }
+
   .btn-add {
     width: 100%;
     padding: 14px;
@@ -1578,6 +1593,7 @@
             </div>
           </div>
           <div class="rule-actions">
+            <button class="btn-icon" onclick="syncNowRule('${rule.id}')" title="Sync Now — one-off push of every matching record" ${syncNowStatus[rule.id]?.status === 'running' ? 'disabled' : ''}>${syncNowStatus[rule.id]?.status === 'running' ? '⏳' : '▶'}</button>
             <button class="btn-icon" onclick="editRule('${rule.id}')" title="Edit">✎</button>
             <button class="btn-icon delete" onclick="deleteRule('${rule.id}')" title="Delete">✕</button>
           </div>
@@ -1592,8 +1608,79 @@
             </div>
           `).join('')}
         </div>` : ''}
+        ${renderSyncNowStatus(rule.id)}
       </div>
     `).join('');
+  }
+
+  // ── SYNC NOW (one-off manual backfill of a single rule) ──────────────────
+  let syncNowStatus = {};   // ruleId -> latest status payload from the server
+  let syncNowPollers = {};  // ruleId -> setInterval id
+
+  function escHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  function renderSyncNowStatus(ruleId) {
+    const s = syncNowStatus[ruleId];
+    if (!s) return '';
+
+    if (s.status === 'running') {
+      const pct = s.total > 0 ? Math.round((s.processed / s.total) * 100) : 0;
+      return `<div class="rule-syncnow running">
+        ⏳ Syncing… ${s.processed}/${s.total || '?'} (${pct}%)${s.errors ? ` · ${s.errors} error(s)` : ''}
+      </div>`;
+    }
+    if (s.status === 'complete') {
+      return `<div class="rule-syncnow ${s.errors ? 'warn' : 'success'}">
+        ${s.errors ? '⚠️' : '✅'} Synced ${s.synced} record(s)${s.errors ? `, ${s.errors} error(s)` : ''} — ${s.processed} checked
+      </div>`;
+    }
+    if (s.status === 'error') {
+      return `<div class="rule-syncnow error">❌ ${escHtml(s.message || 'Sync failed')}</div>`;
+    }
+    return '';
+  }
+
+  function syncNowRule(id) {
+    if (syncNowStatus[id]?.status === 'running') return;
+
+    fetch(`/settings/rules/${id}/sync-now`, { method: 'POST' })
+      .then(async r => ({ ok: r.ok, data: await r.json() }))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          showToast('❌ ' + (data.error || 'Could not start sync'), 'error');
+          return;
+        }
+        syncNowStatus[id] = { status: 'running', total: 0, processed: 0, synced: 0, errors: 0 };
+        render();
+        pollSyncNowStatus(id);
+      })
+      .catch(() => showToast('❌ Network error - please try again', 'error'));
+  }
+
+  function pollSyncNowStatus(id) {
+    if (syncNowPollers[id]) return; // already polling this rule
+    syncNowPollers[id] = setInterval(() => {
+      fetch(`/settings/rules/${id}/sync-now/status`)
+        .then(r => r.json())
+        .then(data => {
+          syncNowStatus[id] = data;
+          render();
+          if (data.status === 'complete' || data.status === 'error') {
+            clearInterval(syncNowPollers[id]);
+            delete syncNowPollers[id];
+            if (data.status === 'complete') {
+              showToast(`✓ Sync complete — ${data.synced} record(s) synced${data.errors ? `, ${data.errors} error(s)` : ''}`, data.errors ? '' : 'success');
+            } else {
+              showToast('❌ ' + (data.message || 'Sync failed'), 'error');
+            }
+          }
+        })
+        .catch(() => {}); // transient poll miss — try again next tick
+    }, 2000);
   }
 
   function toggleRule(id, enabled) {
