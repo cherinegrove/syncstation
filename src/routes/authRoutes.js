@@ -5,6 +5,7 @@
 const express     = require('express');
 const router      = express.Router();
 const authService = require('../services/authService');
+const userManagementService = require('../services/userManagementService');
 const pool        = require('../services/database');
 const crypto      = require('crypto');
 
@@ -36,6 +37,34 @@ async function requireAuth(req, res, next) {
     } catch (err) {
         res.status(401).json({ error: err.message });
     }
+}
+
+// Resolves which portal a request operates on and verifies req.user actually
+// belongs to it. The session's own bound portalId is authoritative; a
+// client-supplied portalId (query/body) — needed for users who haven't
+// selected a portal yet — is only ever honored after confirming DB
+// membership, never trusted outright. Returns { portalId } or { status, error }.
+async function resolveAuthorizedPortal(req, requireRoles) {
+    let portalId = req.user.portalId;
+    let role     = req.user.role;
+
+    if (!portalId) {
+        portalId = req.query.portalId || req.body?.portalId;
+        if (!portalId) return { status: 400, error: 'No portal selected' };
+
+        const membership = await pool.query(
+            'SELECT role FROM portal_users WHERE user_id = $1 AND portal_id = $2 AND is_active = true',
+            [req.user.userId, portalId]
+        );
+        if (!membership.rows.length) return { status: 403, error: 'You do not have access to this portal' };
+        role = membership.rows[0].role;
+    }
+
+    if (requireRoles && !requireRoles.includes(role)) {
+        return { status: 403, error: 'Insufficient permissions' };
+    }
+
+    return { portalId, role };
 }
 
 // ── REGISTER ─────────────────────────────────────────────────────────────────
@@ -212,14 +241,11 @@ router.post('/password-reset/reset', async (req, res) => {
 router.post('/invite', requireAuth, async (req, res) => {
     try {
         const { email, role = 'user' } = req.body;
-        const portalId = req.user.portalId || req.query.portalId || req.body.portalId;
+        if (!email) return res.status(400).json({ error: 'Email is required' });
 
-        if (!portalId) return res.status(400).json({ error: 'No portal associated with this session' });
-        if (!email)    return res.status(400).json({ error: 'Email is required' });
-
-        if (!['owner', 'admin'].includes(req.user.role)) {
-            return res.status(403).json({ error: 'Only portal owners and admins can invite users' });
-        }
+        const auth = await resolveAuthorizedPortal(req, ['owner', 'admin']);
+        if (auth.error) return res.status(auth.status).json({ error: auth.error });
+        const { portalId } = auth;
 
         const inviteToken   = crypto.randomBytes(32).toString('hex');
         const inviteExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -357,8 +383,9 @@ router.post('/accept-invite', async (req, res) => {
 
 router.get('/team', requireAuth, async (req, res) => {
     try {
-        const portalId = req.user.portalId || req.query.portalId;
-        if (!portalId) return res.status(400).json({ error: 'portalId required' });
+        const auth = await resolveAuthorizedPortal(req);
+        if (auth.error) return res.status(auth.status).json({ error: auth.error });
+        const { portalId } = auth;
 
         const [usersResult, invitesResult] = await Promise.all([
             pool.query(
@@ -397,21 +424,24 @@ router.delete('/team/:userId', requireAuth, async (req, res) => {
         const portalId     = req.user.portalId || req.query.portalId;
         const targetUserId = parseInt(req.params.userId);
 
-        if (!['owner', 'admin'].includes(req.user.role)) {
-            return res.status(403).json({ error: 'Insufficient permissions' });
-        }
+        if (!portalId) return res.status(400).json({ error: 'No portal selected' });
         if (targetUserId === req.user.userId) {
             return res.status(400).json({ error: 'You cannot remove yourself' });
         }
 
-        await pool.query(
-            `UPDATE portal_users SET is_active = false WHERE user_id = $1 AND portal_id = $2`,
-            [targetUserId, portalId]
-        );
+        // Delegates to the service that already does this correctly: it re-verifies
+        // the requester's role against the DATABASE for this exact portal (so a
+        // spoofed portalId can't grant access), blocks removing the owner, blocks
+        // admin-on-admin removal, and revokes the removed user's active session —
+        // the previous inline version here did none of the latter three.
+        await userManagementService.removeUser(targetUserId, portalId, req.user.userId);
 
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        const status = err.message.includes('do not have access') || err.message.includes('Only owners and admins')
+            ? 403
+            : err.message.includes('not found') ? 404 : 400;
+        res.status(status).json({ error: err.message });
     }
 });
 

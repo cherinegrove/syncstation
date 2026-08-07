@@ -374,12 +374,16 @@ router.post('/forgot-password', async (req, res) => {
     );
     
     const resetUrl = `${process.env.APP_BASE_URL || 'https://portal.syncstation.app'}/admin/auth/reset-password?token=${resetToken}`;
-    
-    // Return URL so you can manually share it (in production, send via email)
-    res.json({ 
+
+    // Never return the token to the requester — anyone who knew/guessed the
+    // admin's email could otherwise take over the account with no email access.
+    // Log server-side for now (matches the regular-user reset flow); actual email
+    // delivery isn't wired up yet (no SMTP creds configured in this environment).
+    console.log(`[AdminAuth] Password reset for ${user.email}: ${resetUrl}`);
+
+    res.json({
       success: true,
-      message: 'Reset link generated',
-      resetUrl: resetUrl
+      message: 'If an account exists with this email, a reset link has been sent'
     });
     
   } catch (err) {
