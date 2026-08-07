@@ -290,7 +290,7 @@ async function pollObjectType(portalId, objectType) {
       return { synced: 0, errors: 0 };
     }
     
-    const client = await getClient(portalId);
+    let client = await getClient(portalId);
     const rules = await getSyncRulesForPolling(portalId, objectType);
     
     if (rules.length === 0) {
@@ -338,6 +338,13 @@ async function pollObjectType(portalId, objectType) {
         // Apply all matching sync rules
         for (const rule of rules) {
           try {
+            // Refresh right before use — a large backlog processed with the
+            // built-in rate-limit delays can run long enough to outlive the
+            // token fetched once at the top of this function. getClient() is
+            // cheap when nothing needs refreshing (in-memory check only) and
+            // only does real work when the token is genuinely close to expiry.
+            client = await getClient(portalId);
+
             let sourceObjectType = rule.sourceObject;
             let sourceId = recordId;
             let targetObjectType = rule.targetObject;

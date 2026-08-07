@@ -58,16 +58,35 @@ const ERROR_TYPES = {
   RATE_LIMIT: 'rate_limit',
   ASSOCIATION_FAILED: 'association_failed',
   OBJECT_NOT_FOUND: 'object_not_found',
+  TOKEN_EXPIRED: 'token_expired',
   UNKNOWN: 'unknown'
 };
 
-// Parse HubSpot API errors into user-friendly messages
+// Parse HubSpot API errors into user-friendly messages.
+// Two error shapes reach here: raw axios errors (custom-object direct API
+// calls — err.response.status/data), and the @hubspot/api-client SDK's own
+// ApiException (standard-object calls — err.code/err.body, no err.response
+// at all). Every branch below used to key off err.response.status only, so
+// for the SDK shape — the majority of syncs — status was always undefined
+// and every error silently fell through to the generic UNKNOWN bucket,
+// including 429s that retryWithBackoff exists specifically to retry.
 function parseApiError(err, objectType) {
-  const status = err.response?.status;
-  const errorData = err.response?.data;
+  const status = err.response?.status ?? err.code;
+  const errorData = err.response?.data ?? err.body;
   const message = errorData?.message || err.message;
-  const headers = err.response?.headers || {};
-  
+  const headers = err.response?.headers || err.headers || {};
+
+  // 401 Unauthorized - access token expired mid-run (e.g. a long polling
+  // backlog outliving the token's ~30min lifetime). Retrying with the same
+  // client won't help; the caller needs to fetch a fresh one via getClient().
+  if (status === 401) {
+    return {
+      type: ERROR_TYPES.TOKEN_EXPIRED,
+      userMessage: `Access token expired mid-sync — will retry with a fresh token.`,
+      technicalMessage: message
+    };
+  }
+
   // 403 Forbidden - Permission/scope issues
   if (status === 403) {
     if (isCustomObject(objectType)) {
@@ -547,9 +566,10 @@ async function validateSyncRule(client, sourceObjectType, targetObjectType, mapp
   return validation;
 }
 
-module.exports = { 
-  sync, 
+module.exports = {
+  sync,
   validateSyncRule,
   ERROR_TYPES,
-  isCustomObject
+  isCustomObject,
+  parseApiError
 };
