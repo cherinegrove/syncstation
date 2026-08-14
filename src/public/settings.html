@@ -197,6 +197,15 @@
     border: 1px solid var(--border);
   }
 
+  .rule-error-badge {
+    background: rgba(255,84,104,0.1) !important;
+    color: var(--error, #FF5468);
+    border-color: rgba(255,84,104,0.3) !important;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .rule-error-badge:hover { background: rgba(255,84,104,0.2) !important; }
+
   .rule-actions { display: flex; gap: 8px; }
 
   .btn-icon {
@@ -781,101 +790,6 @@
     border-radius: 4px;
   }
 
-  /* ERROR LOG STYLES */
-  .error-log {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 32px;
-  }
-
-  .error-log-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-  }
-
-  .error-log-title {
-    font-size: 16px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .error-log-actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  .btn-small {
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .btn-small:hover {
-    color: var(--text);
-    border-color: #44445a;
-  }
-
-  .error-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 400px;
-    overflow-y: auto;
-  }
-
-  .error-item {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--error);
-    border-radius: 6px;
-    padding: 12px;
-    font-size: 13px;
-  }
-
-  .error-time {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 4px;
-  }
-
-  .error-message {
-    color: var(--text);
-    margin-bottom: 6px;
-  }
-
-  .error-meta {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .error-meta span {
-    background: var(--bg);
-    padding: 2px 6px;
-    border-radius: 3px;
-  }
-
-  .error-empty {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--muted);
-  }
-
   /* PayStack Upgrade UI Styles */
   .upgrade-container {
     background: var(--surface);
@@ -1025,6 +939,7 @@
     </div>
   <nav class="header-nav">
     <a id="navSettings" href="#" class="active">Sync Rules</a>
+    <a id="navErrors" href="#">Errors</a>
     <a id="navAccount" href="#">Account</a>
     <a id="navTeam" href="#">Team</a>
   </nav>
@@ -1068,7 +983,7 @@
       <div class="stat-value" id="statMappings">0</div>
       <div class="stat-label">Property mappings</div>
     </div>
-    <div class="stat-card clickable" onclick="toggleErrorLog()">
+    <div class="stat-card clickable" onclick="window.location.href = '/errors?portalId=' + portalId">
       <div class="stat-value errors" id="statErrors">0</div>
       <div class="stat-label">Sync errors</div>
     </div>
@@ -1158,27 +1073,6 @@
             Upgrade to Business
           </button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ERROR LOG -->
-  <div class="error-log" id="errorLog" style="display:none">
-    <div class="error-log-header">
-      <div class="error-log-title">
-        <span>⚠️</span>
-        <span>Sync Error Log</span>
-      </div>
-      <div class="error-log-actions">
-        <button class="btn-small" onclick="loadErrors()">🔄 Refresh</button>
-        <button class="btn-small" onclick="clearErrors()">🗑 Clear All</button>
-        <button class="btn-small" onclick="toggleErrorLog()">✕ Close</button>
-      </div>
-    </div>
-    <div class="error-list" id="errorList">
-      <div class="error-empty">
-        <div style="font-size:32px;margin-bottom:8px">✅</div>
-        <div>No sync errors</div>
       </div>
     </div>
   </div>
@@ -1359,10 +1253,10 @@
   let sourceProps = [];
   let targetProps = [];
   let availableObjects = [];
-  let syncErrors = [];
 
   // Set nav links immediately — don't wait for async
   document.getElementById('navSettings').href = '/settings';
+  document.getElementById('navErrors').href   = '/errors';
   document.getElementById('navAccount').href  = '/account';
   document.getElementById('navTeam').href     = '/user-management';
 
@@ -1382,6 +1276,12 @@
       // "session expired" login page instead of prompting to connect HubSpot.
       const tierData = tierRes.status === 403 ? {} : await tierRes.json();
       portalId = tierData.portalId || '';
+      // account.html and user-management.html both persist this so cross-page
+      // nav links resolve the right portal; settings.html — the page most
+      // users land on first — never did, so links to it out of a fresh
+      // session showed a blank portal badge
+      if (portalId) localStorage.setItem('syncstation_portal_id', portalId);
+      document.getElementById('navErrors').href = `/errors?portalId=${portalId}`;
 
       if (!portalId) {
         document.getElementById('portalBadge').textContent = 'No portal — reconnect HubSpot';
@@ -1400,6 +1300,7 @@
       loadNotifications();
       loadAvailableObjects();
       loadErrors().catch(() => {});
+      loadRuleErrorCounts().catch(() => {});
       checkHubSpotConnection(); // fires in background, doesn't block the page
     } catch (e) {
       console.error('Settings init error:', e.message);
@@ -1464,70 +1365,31 @@
     targetSelect.innerHTML = options;
   }
 
-  // Load sync errors
+  // Update the "Sync errors" stat tile with the real total (not capped —
+  // the detailed list, filtering, and clearing all live on the dedicated
+  // /errors page now).
   async function loadErrors() {
     try {
-      const res = await fetch('/settings/errors');
-      if (!res.ok) {
-        console.log('Error endpoint returned:', res.status);
-        return;
-      }
+      const res = await fetch('/settings/errors?limit=1');
+      if (!res.ok) return;
       const data = await res.json();
-      syncErrors = data.errors || [];
-      
-      document.getElementById('statErrors').textContent = syncErrors.length;
-      
-      const list = document.getElementById('errorList');
-      if (syncErrors.length === 0) {
-        list.innerHTML = `
-          <div class="error-empty">
-            <div style="font-size:32px;margin-bottom:8px">✅</div>
-            <div>No sync errors</div>
-          </div>
-        `;
-        return;
-      }
-      
-      list.innerHTML = syncErrors.map(err => {
-        const time = new Date(err.created_at).toLocaleString();
-        return `
-          <div class="error-item">
-            <div class="error-time">${time}</div>
-            <div class="error-message">${err.error_message || 'Unknown error'}</div>
-            <div class="error-meta">
-              ${err.rule_name ? `<span>Rule: ${err.rule_name}</span>` : ''}
-              ${err.source_object ? `<span>${err.source_object}${err.source_id ? ' ' + err.source_id : ''}</span>` : ''}
-              ${err.target_object ? `<span>→ ${err.target_object}</span>` : ''}
-              ${err.error_type ? `<span>${err.error_type}</span>` : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
+      document.getElementById('statErrors').textContent = data.totalCount ?? 0;
     } catch (err) {
-      console.error('[Error Log] Failed to load:', err);
+      console.error('[Errors] Failed to load count:', err);
     }
   }
 
-  async function clearErrors() {
-    if (!await syncConfirm('Are you sure you want to clear all sync errors?', 'Clear Errors', 'Clear All')) return;
-    
+  // Per-rule error counts, shown as a small badge on each rule card
+  let ruleErrorCounts = {};
+  async function loadRuleErrorCounts() {
     try {
-      await fetch('/settings/errors', { method: 'DELETE' });
-      syncErrors = [];
-      document.getElementById('statErrors').textContent = '0';
-      loadErrors();
-      showToast('✓ Error log cleared', 'success');
+      const res = await fetch('/settings/errors/summary');
+      const data = await res.json();
+      ruleErrorCounts = {};
+      (data.byRule || []).forEach(r => { ruleErrorCounts[r.ruleName] = r.count; });
+      render();
     } catch (err) {
-      showToast('Failed to clear errors', 'error');
-    }
-  }
-
-  function toggleErrorLog() {
-    const log = document.getElementById('errorLog');
-    const isVisible = log.style.display !== 'none';
-    log.style.display = isVisible ? 'none' : 'block';
-    if (!isVisible) {
-      loadErrors();
+      console.error('[Errors] Failed to load per-rule counts:', err);
     }
   }
 
@@ -1596,6 +1458,7 @@
               ${rule.syncOnAssociation ? '<span style="background:rgba(99,179,237,0.15);color:#63b3ed;padding:2px 8px;border-radius:4px;font-size:11px;">🔗 On association</span>' : ''}
               <span>${rule.assocRule}</span>
               <span>${rule.mappings?.length || 0} mappings</span>
+              ${ruleErrorCounts[rule.name] ? `<span class="rule-error-badge" onclick="window.location.href='/errors?portalId=' + portalId + '&rule=' + encodeURIComponent('${rule.name.replace(/'/g, "\\'")}')" title="View this rule's errors">⚠ ${ruleErrorCounts[rule.name]} error${ruleErrorCounts[rule.name] !== 1 ? 's' : ''}</span>` : ''}
             </div>
           </div>
           <div class="rule-actions">
@@ -2162,19 +2025,10 @@
   // Boot the page — fetches portalId from session then loads everything
   initSettings();
   
-  // Auto-refresh errors every 30 seconds if error log is visible
+  // Keep the error count and per-rule badges fresh
   setInterval(() => {
-    if (document.getElementById('errorLog').style.display !== 'none') {
-      loadErrors().catch(err => console.log('Error loading errors:', err));
-    } else {
-      // Just update the count
-      fetch('/settings/errors')
-        .then(r => r.json())
-        .then(data => {
-          document.getElementById('statErrors').textContent = (data.errors || []).length;
-        })
-        .catch(() => {});
-    }
+    loadErrors().catch(() => {});
+    loadRuleErrorCounts().catch(() => {});
   }, 30000); // 30 seconds
 
   // ========== PAYSTACK UPGRADE FUNCTIONS ==========

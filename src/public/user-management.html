@@ -92,6 +92,7 @@
         </div>
         <nav class="header-nav">
             <a id="navSettings" href="#">Sync Rules</a>
+            <a id="navErrors" href="#">Errors</a>
             <a id="navAccount" href="#">Account</a>
             <a id="navTeam" href="#" class="active">Team</a>
         </nav>
@@ -169,6 +170,7 @@
         const portalId  = urlParams.get('portalId') || localStorage.getItem('syncstation_portal_id') || '';
 
         document.getElementById('navSettings').href = '/settings';
+        document.getElementById('navErrors').href   = `/errors?portalId=${portalId}`;
         document.getElementById('navAccount').href  = `/account?portalId=${portalId}`;
         document.getElementById('navTeam').href     = `/user-management?portalId=${portalId}`;
         document.getElementById('portalBadge').textContent = 'Portal ' + (portalId || '—');

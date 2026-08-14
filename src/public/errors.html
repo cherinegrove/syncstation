@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Errors - SyncStation</title>
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+    :root {
+        --bg: #0F0F11; --surface: #18181C; --surface2: #222228;
+        --border: #343543; --accent: #FF6B35; --accent2: #A31256;
+        --text: #F0F0F4; --muted: #A9AAB6;
+        --success: #3FD089; --warning: #EE8E5A; --error: #FF5468;
+        --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 40px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; isolation: isolate; }
+    .logo { display: flex; align-items: center; flex: 1; }
+    .logo img { width: 170px; height: 48px; border-radius: 8px; overflow: hidden; }
+    .header-nav { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px; border: 1px solid var(--border); position: absolute; left: 50%; transform: translateX(-50%); }
+    .header-nav a { font-family: 'DM Sans', sans-serif; text-decoration: none; font-size: 14px; font-weight: 500; padding: 7px 20px; border-radius: 6px; transition: all 0.15s; color: var(--muted); }
+    .header-nav a.active { background: var(--bg); color: var(--text); }
+    .header-nav a:hover { color: var(--text); }
+    .portal-badge { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); background: var(--surface2); padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); flex: 1; text-align: right; }
+
+    .main { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+    .page-title { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .page-subtitle { color: var(--muted); font-size: 15px; margin-bottom: 28px; }
+
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .toolbar select {
+        padding: 9px 32px 9px 14px; background: var(--surface2); border: 1px solid var(--border);
+        border-radius: 8px; font-size: 13px; color: var(--text); font-family: 'DM Sans', sans-serif;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 12px center; appearance: none; -webkit-appearance: none;
+    }
+    .toolbar-spacer { flex: 1; }
+    .btn { padding: 9px 16px; border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn:hover { border-color: #44445a; }
+    .btn-danger { color: var(--error); }
+    .btn-danger:hover { background: rgba(255,84,104,0.1); border-color: rgba(255,84,104,0.3); }
+
+    .summary-strip { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .summary-strip strong { color: var(--text); }
+
+    .error-item { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--error); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 12px; }
+    .error-time { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .error-message { font-size: 14px; color: var(--text); margin-bottom: 10px; line-height: 1.5; word-break: break-word; }
+    .error-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+    .error-meta span { font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 3px 10px; border-radius: 4px; }
+
+    .empty-state { text-align: center; padding: 64px 20px; color: var(--muted); }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-title { font-size: 16px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+
+    .load-more { display: block; width: 100%; padding: 12px; margin-top: 8px; background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; }
+    .load-more:hover { border-color: var(--accent); color: var(--accent); }
+    .load-more:disabled { opacity: 0.5; cursor: default; }
+
+    .loading-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <img src="/images/SyncStation@2x.webp" alt="SyncStation">
+        </div>
+        <nav class="header-nav">
+            <a id="navSettings" href="#">Sync Rules</a>
+            <a id="navErrors" href="#" class="active">Errors</a>
+            <a id="navAccount" href="#">Account</a>
+            <a id="navTeam" href="#">Team</a>
+        </nav>
+        <div class="portal-badge" id="portalBadge">Loading...</div>
+    </header>
+
+    <main class="main">
+        <div class="page-title">Sync Error Log</div>
+        <div class="page-subtitle">Every failed sync, with which rule and record it happened on.</div>
+
+        <div id="loadingState" class="loading-state">Loading…</div>
+
+        <div id="content" style="display:none">
+            <div class="toolbar">
+                <select id="ruleFilter" onchange="onFilterChange()">
+                    <option value="">All rules</option>
+                </select>
+                <div class="toolbar-spacer"></div>
+                <button class="btn" onclick="refresh()">🔄 Refresh</button>
+                <button class="btn btn-danger" onclick="clearErrors()">🗑 Clear All</button>
+            </div>
+
+            <div class="summary-strip" id="summaryStrip"></div>
+
+            <div id="errorList"></div>
+            <button class="load-more" id="loadMoreBtn" onclick="loadMore()" style="display:none">Load more</button>
+
+            <div class="empty-state" id="emptyState" style="display:none">
+                <div class="empty-icon">✅</div>
+                <div class="empty-title">No sync errors</div>
+                <div>Everything is syncing cleanly for this filter.</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const portalId  = urlParams.get('portalId') || localStorage.getItem('syncstation_portal_id') || '';
+        const PAGE_SIZE  = 50;
+
+        document.getElementById('navSettings').href = '/settings';
+        document.getElementById('navErrors').href   = `/errors?portalId=${portalId}`;
+        document.getElementById('navAccount').href  = `/account?portalId=${portalId}`;
+        document.getElementById('navTeam').href     = `/user-management?portalId=${portalId}`;
+        document.getElementById('portalBadge').textContent = 'Portal ' + (portalId || '—');
+        if (portalId) localStorage.setItem('syncstation_portal_id', portalId);
+
+        let currentRule = urlParams.get('rule') || '';
+        let loaded = [];
+        let totalCount = 0;
+
+        function escHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str == null ? '' : String(str);
+            return div.innerHTML;
+        }
+
+        async function loadSummary() {
+            const res = await fetch(`/settings/errors/summary?portalId=${portalId}`);
+            const data = await res.json();
+            const select = document.getElementById('ruleFilter');
+            select.innerHTML = '<option value="">All rules</option>' + (data.byRule || [])
+                .map(r => `<option value="${escHtml(r.ruleName)}">${escHtml(r.ruleName)} (${r.count})</option>`)
+                .join('');
+            if (currentRule) select.value = currentRule;
+        }
+
+        function renderErrors(append) {
+            const list = document.getElementById('errorList');
+            const html = loaded.map(err => {
+                const time = err.time ? new Date(err.time).toLocaleString() : 'Unknown time';
+                return `
+                    <div class="error-item">
+                        <div class="error-time">${time}</div>
+                        <div class="error-message">${escHtml(err.message)}</div>
+                        <div class="error-meta">
+                            ${err.ruleName ? `<span>Rule: ${escHtml(err.ruleName)}</span>` : ''}
+                            ${err.objectType ? `<span>${escHtml(err.objectType)}</span>` : ''}
+                            ${err.sourceRecordId ? `<span>Record ${escHtml(err.sourceRecordId)}</span>` : ''}
+                            ${err.targetRecordId ? `<span>→ ${escHtml(err.targetRecordId)}</span>` : ''}
+                            ${err.triggerType ? `<span>${escHtml(err.triggerType)}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            list.innerHTML = html;
+
+            document.getElementById('emptyState').style.display = loaded.length === 0 ? 'block' : 'none';
+            document.getElementById('summaryStrip').textContent = totalCount === 0
+                ? ''
+                : `Showing ${loaded.length} of ${totalCount} error${totalCount !== 1 ? 's' : ''}${currentRule ? ` for "${currentRule}"` : ''}`;
+
+            const moreBtn = document.getElementById('loadMoreBtn');
+            moreBtn.style.display = loaded.length < totalCount ? 'block' : 'none';
+        }
+
+        async function fetchPage(offset) {
+            const params = new URLSearchParams({ portalId, limit: PAGE_SIZE, offset });
+            if (currentRule) params.set('rule', currentRule);
+            const res = await fetch(`/settings/errors?${params}`);
+            if (res.status === 401 || res.status === 403) {
+                window.location.href = '/select-portal?redirect=/errors';
+                return null;
+            }
+            return res.json();
+        }
+
+        async function refresh() {
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('content').style.display = 'none';
+            const data = await fetchPage(0);
+            if (!data) return;
+            loaded = data.errors || [];
+            totalCount = data.totalCount || 0;
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+            renderErrors(false);
+        }
+
+        async function loadMore() {
+            const btn = document.getElementById('loadMoreBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading…';
+            const data = await fetchPage(loaded.length);
+            if (data) {
+                loaded = loaded.concat(data.errors || []);
+                totalCount = data.totalCount || totalCount;
+                renderErrors(true);
+            }
+            btn.disabled = false;
+            btn.textContent = 'Load more';
+        }
+
+        function onFilterChange() {
+            currentRule = document.getElementById('ruleFilter').value;
+            const params = new URLSearchParams({ portalId });
+            if (currentRule) params.set('rule', currentRule);
+            window.history.replaceState({}, '', `/errors?${params}`);
+            refresh();
+        }
+
+        async function clearErrors() {
+            if (!confirm('Permanently delete all sync error history for this portal?')) return;
+            await fetch(`/settings/errors?portalId=${portalId}`, { method: 'DELETE' });
+            currentRule = '';
+            document.getElementById('ruleFilter').value = '';
+            await loadSummary();
+            await refresh();
+        }
+
+        (async function init() {
+            await loadSummary();
+            await refresh();
+        })();
+    </script>
+</body>
+</html>

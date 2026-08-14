@@ -104,19 +104,35 @@ router.get('/', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '../public/settings.html'));
 });
 
-// GET /settings/errors - Return sync errors for a portal
+// GET /settings/errors - Return sync errors for a portal, paginated, with an
+// accurate total count. Previously capped at 50 rows with no total, so a
+// portal with hundreds of real errors and one with exactly 50 looked
+// identical on the dashboard's "Sync errors" stat.
 router.get('/errors', requirePortalAccess, async (req, res) => {
   const portalId = req.portalId;
-  
+  const ruleName = req.query.rule || null;
+  const limit    = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+  const offset   = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
   // Prevent browser caching
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  
+
   const p = getPool();
-  if (!p) return res.json({ errors: [] });
+  if (!p) return res.json({ errors: [], totalCount: 0 });
 
   try {
+    const params = [String(portalId)];
+    let ruleFilter = '';
+    if (ruleName) { params.push(ruleName); ruleFilter = ` AND rule_name = $${params.length}`; }
+
+    const countResult = await p.query(
+      `SELECT COUNT(*) FROM sync_logs WHERE portal_id = $1 AND status = 'error'${ruleFilter}`,
+      params
+    );
+
+    params.push(limit, offset);
     const result = await p.query(`
       SELECT id, sync_time, status, error_message, object_type, rule_name,
              COALESCE(trigger_type, 'webhook') AS trigger_type,
@@ -124,9 +140,10 @@ router.get('/errors', requirePortalAccess, async (req, res) => {
       FROM sync_logs
       WHERE portal_id = $1
         AND status = 'error'
+        ${ruleFilter}
       ORDER BY sync_time DESC
-      LIMIT 50
-    `, [String(portalId)]);
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `, params);
 
     const errors = result.rows.map(r => ({
       id:             r.id,
@@ -139,10 +156,33 @@ router.get('/errors', requirePortalAccess, async (req, res) => {
       targetRecordId: r.target_record_id,
     }));
 
-    res.json({ errors });
+    res.json({ errors, totalCount: parseInt(countResult.rows[0].count, 10) });
   } catch (e) {
     console.error('[Settings] errors query failed:', e.message);
-    res.json({ errors: [] });
+    res.json({ errors: [], totalCount: 0 });
+  }
+});
+
+// GET /settings/errors/summary - Error counts grouped by rule, so a specific
+// broken rule is visible at a glance instead of only a portal-wide total.
+router.get('/errors/summary', requirePortalAccess, async (req, res) => {
+  const portalId = req.portalId;
+  const p = getPool();
+  if (!p) return res.json({ byRule: [] });
+
+  try {
+    const result = await p.query(`
+      SELECT COALESCE(rule_name, '(unknown rule)') AS rule_name, COUNT(*) AS count
+      FROM sync_logs
+      WHERE portal_id = $1 AND status = 'error'
+      GROUP BY rule_name
+      ORDER BY count DESC
+    `, [String(portalId)]);
+
+    res.json({ byRule: result.rows.map(r => ({ ruleName: r.rule_name, count: parseInt(r.count, 10) })) });
+  } catch (e) {
+    console.error('[Settings] errors summary query failed:', e.message);
+    res.json({ byRule: [] });
   }
 });
 

@@ -100,6 +100,7 @@ app.get('/register',         (req, res) => res.sendFile(path.join(__dirname, 'sr
 app.get('/forgot-password',  (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'forgot-password.html')));
 app.get('/reset-password',   (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'reset-password.html')));
 app.get('/user-management',  (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'user-management.html')));
+app.get('/errors',           (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'errors.html')));
 app.get('/payment-success',  (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'payment-success.html')));
 app.get('/select-portal',    (req, res) => res.sendFile(path.join(__dirname, 'src', 'public', 'select-portal.html')));
 
