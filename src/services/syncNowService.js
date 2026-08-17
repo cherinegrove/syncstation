@@ -85,9 +85,14 @@ async function backfillDirection(portalId, rule, objectType, job) {
         }
       }
       if (result.errors?.length) {
-        job.errors += result.errors.length;
+        // A vanished source record (deleted/merged between record selection
+        // and fetch) is expected noise, not a real error — log it as
+        // 'skipped' so it doesn't count toward job.errors or the
+        // customer-facing error total.
         for (const error of result.errors) {
-          await logSyncResult(portalId, objectType, rule.name, 'error', error.message, 0, record.id, null, 'manual');
+          const status = error.skippable ? 'skipped' : 'error';
+          if (status === 'error') job.errors++;
+          await logSyncResult(portalId, objectType, rule.name, status, error.message, 0, record.id, null, 'manual');
         }
       }
     } catch (err) {

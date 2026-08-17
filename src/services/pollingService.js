@@ -387,14 +387,17 @@ async function pollObjectType(portalId, objectType) {
             }
             
             if (result.errors && result.errors.length > 0) {
-              errorCount += result.errors.length;
-              
-              // ✅ LOG ERRORS
+              // A vanished source record (deleted/merged between discovery
+              // and fetch) is expected noise, not a real error — log it as
+              // 'skipped' so it never counts toward the customer-facing
+              // error total or appears in their error list.
               for (const error of result.errors) {
-                await logSyncResult(portalId, objectType, rule.name, 'error', error.message, 0, sourceId, null);
+                const status = error.skippable ? 'skipped' : 'error';
+                if (status === 'error') errorCount++;
+                await logSyncResult(portalId, objectType, rule.name, status, error.message, 0, sourceId, null);
               }
             }
-            
+
             // 🆕 Add delay between syncs to prevent rate limiting
             await delay(DELAY_BETWEEN_SYNCS);
             

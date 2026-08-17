@@ -251,7 +251,12 @@ async function processWebhookRule(client, portalId, rule, objectType, sourceId) 
 
     const synced  = result.updated || 0;
     const errors  = result.errors  || [];
-    const status  = errors.length > 0 && synced === 0 ? 'error' : 'success';
+    // A vanished source record (deleted/merged in the moment between the
+    // webhook firing and this sync's fetch) is expected noise, not a real
+    // error — a batch of errors that are all skippable shouldn't flip the
+    // overall status to 'error'.
+    const allSkippable = errors.length > 0 && errors.every(e => e.skippable);
+    const status  = errors.length > 0 && synced === 0 ? (allSkippable ? 'skipped' : 'error') : 'success';
 
     console.log(`[Webhooks] Rule "${rule.name}" synced ${synced} record(s) - status: ${status}`);
     if (errors.length > 0) {
@@ -271,6 +276,10 @@ async function processWebhookRule(client, portalId, rule, objectType, sourceId) 
           target.status === 'updated' ? 1 : 0,
           String(sourceId), String(target.id)
         );
+      }
+    } else if (errors.length > 0) {
+      for (const error of errors) {
+        await logWebhookSync(portalId, sourceObjectType, rule.name, error.skippable ? 'skipped' : 'error', error.message, 0, String(sourceId), null);
       }
     } else {
       await logWebhookSync(portalId, sourceObjectType, rule.name, status, null, synced, String(sourceId), null);

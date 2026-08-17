@@ -370,12 +370,23 @@ async function sync(client, {
     sourceProps = await getProperties(client, sourceObjectType, sourceId, srcPropNames, portalId);
     console.log(`[Sync] Source properties:`, JSON.stringify(sourceProps));
   } catch (err) {
-    syncResult.status = 'error';
+    // A source record that 404s here is almost always one that was deleted
+    // or merged in HubSpot in the moments between a polling cycle's search
+    // (which found it as "recently changed") and this follow-up fetch —
+    // HubSpot's search index can briefly lag behind real-time deletions.
+    // That's expected, unavoidable noise, not something the customer or the
+    // rule can act on, so it's marked distinctly from a genuine error and
+    // callers keep it out of the customer-facing error count/list.
+    const isVanishedSource = err.type === ERROR_TYPES.OBJECT_NOT_FOUND;
+    syncResult.status = isVanishedSource ? 'skipped_missing_source' : 'error';
     syncResult.errors.push({
       stage: 'fetch_source',
-      message: err.message,
+      message: isVanishedSource
+        ? `Source ${sourceObjectType} record ${sourceId} no longer exists in HubSpot (likely deleted or merged shortly after being detected as changed) — skipped.`
+        : err.message,
       type: err.type,
-      objectType: sourceObjectType
+      objectType: sourceObjectType,
+      skippable: isVanishedSource
     });
     return syncResult;
   }
